@@ -115,7 +115,7 @@ else:
             st.dataframe(overdue_df.sort_values('Due date').reset_index(drop=True).loc[:, ['Task Name','Bucket Name','Progress','Due date','Priority']].head(200))
 
         # Checklist completion parsing (if exists)
-        if 'Completed Checklist Items' in tasks.columns:
+       if 'Completed Checklist Items' in tasks.columns:
     def to_pct(x):
         if pd.isna(x):
             return None
@@ -123,12 +123,13 @@ else:
         if len(parts) == 2:
             try:
                 num, den = float(parts[0]), float(parts[1])
-               return (num / den * 100) if den != 0 else None
+                return num / den if den != 0 else None
             except:
                 return None
         return None
 
     tasks['check_pct'] = tasks['Completed Checklist Items'].apply(to_pct)
+pass
 
         
         # Timeline chart (start -> due)
