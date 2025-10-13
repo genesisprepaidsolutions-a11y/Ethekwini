@@ -116,20 +116,20 @@ else:
 
         # Checklist completion parsing (if exists)
         if 'Completed Checklist Items' in tasks.columns:
-            def parse_checklist(x):
-                try:
-                    if pd.isna(x): return None
-                    if isinstance(x, (int, float)): return float(x)
-                    parts = str(x).split('/')
-                    if len(parts)==2:
-                        return float(parts[0]) / float(parts[1]) if float(parts[1])!=0 else None
-                    return None
-                except:
-                    return None
-            tasks['check_pct'] = tasks['Completed Checklist Items'].apply(parse_checklist)
-            if tasks['check_pct'].notna().any():
-                st.markdown("#### Checklist completion (task-level)")
-                st.dataframe(tasks[['Task Name','Completed Checklist Items','Percentage']].sort_values('check_pct', ascending=False).head(200))
+    def to_pct(x):
+        if pd.isna(x):
+            return None
+        parts = str(x).split('/')
+        if len(parts) == 2:
+            try:
+                num, den = float(parts[0]), float(parts[1])
+               return (num / den * 100) if den != 0 else None
+            except:
+                return None
+        return None
+
+    tasks['check_pct'] = tasks['Completed Checklist Items'].apply(to_pct)
+
         
         # Timeline chart (start -> due)
         if 'Start date' in tasks.columns and 'Due date' in tasks.columns:
