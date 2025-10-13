@@ -13,7 +13,9 @@ st.set_page_config(
     page_icon="📊"
 )
 
-# Force white background (override Streamlit theme)
+# ======================================================
+#   CUSTOM STYLING (WHITE BACKGROUND + DEEZLO BRANDING)
+# ======================================================
 st.markdown(
     """
     <style>
@@ -45,7 +47,7 @@ with col2:
         st.image(logo_path, width=420)
     st.markdown("""
         <h1 style='text-align:center; color:#F26522; margin-bottom:0;'>Deezlo Trading cc</h1>
-        <h4 style='text-align:center; margin-top:0; color:white; text-shadow:1px 1px 3px #000;'>You Dream it, We Build it</h4>
+        <h4 style='text-align:center; margin-top:0; color:black;'>You Dream it, We Build it</h4>
         <h2 style='text-align:center; margin-top:2rem; color:#003049;'>Ethekwini WS-7761 Dashboard</h2>
     """, unsafe_allow_html=True)
 
@@ -174,9 +176,9 @@ st.subheader(f"📋 {sheet_choice} — Preview ({df_main.shape[0]} rows)")
 st.dataframe(df_main.head(200))
 
 # ======================================================
-#   DASHBOARDS (Deezlo Colors)
+#   DASHBOARDS (Deezlo Orange Palette)
 # ======================================================
-deezlo_colors = ["#F26522", "#FF9248", "#003049", "#7BB661", "#F9F9F9"]
+deezlo_colors = ["#F26522", "#FF7F3E", "#FF9248", "#FFB37B"]  # Dark to light orange shades
 
 if "Tasks" in sheets:
     st.markdown("## 📊 Task Analytics")
