@@ -129,7 +129,7 @@ else:
             tasks['check_pct'] = tasks['Completed Checklist Items'].apply(parse_checklist)
             if tasks['check_pct'].notna().any():
                 st.markdown("#### Checklist completion (task-level)")
-                st.dataframe(tasks[['Task Name','Completed Checklist Items','check_pct']].sort_values('check_pct', ascending=False).head(200))
+                st.dataframe(tasks[['Task Name','Completed Checklist Items','Percentage']].sort_values('check_pct', ascending=False).head(200))
         
         # Timeline chart (start -> due)
         if 'Start date' in tasks.columns and 'Due date' in tasks.columns:
