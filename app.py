@@ -125,11 +125,10 @@ else:
                 num, den = float(parts[0]), float(parts[1])
                 return num / den if den != 0 else None
             except:
-                return None
-        return None
-
+               return None
+                   return None
     tasks['check_pct'] = tasks['Completed Checklist Items'].apply(to_pct)
-pass
+
 
         
         # Timeline chart (start -> due)
