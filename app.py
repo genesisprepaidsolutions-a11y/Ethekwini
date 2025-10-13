@@ -1,6 +1,5 @@
 import os
 from datetime import datetime
-
 import pandas as pd
 import plotly.express as px
 import streamlit as st
@@ -14,6 +13,27 @@ st.set_page_config(
     page_icon="📊"
 )
 
+# Force white background (override Streamlit theme)
+st.markdown(
+    """
+    <style>
+    [data-testid="stAppViewContainer"] {
+        background-color: white !important;
+    }
+    [data-testid="stHeader"], [data-testid="stToolbar"] {
+        background: white !important;
+    }
+    [data-testid="stSidebar"] {
+        background-color: #f8f9fa !important;
+    }
+    h1, h2, h3, h4, h5, h6, p, label, span {
+        color: #003049 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # ======================================================
 #   COMPANY HEADER (DEEZLO BRANDING)
 # ======================================================
@@ -25,8 +45,8 @@ with col2:
         st.image(logo_path, width=420)
     st.markdown("""
         <h1 style='text-align:center; color:#F26522; margin-bottom:0;'>Deezlo Trading cc</h1>
-        <h4 style='text-align:center; margin-top:0; color:#FFFFFF; text-shadow:1px 1px 3px #000;'>You Dream it, We Build it</h4>
-        <h2 style='text-align:center; margin-top:2rem;'>Ethekwini WS-7761 Dashboard</h2>
+        <h4 style='text-align:center; margin-top:0; color:white; text-shadow:1px 1px 3px #000;'>You Dream it, We Build it</h4>
+        <h2 style='text-align:center; margin-top:2rem; color:#003049;'>Ethekwini WS-7761 Dashboard</h2>
     """, unsafe_allow_html=True)
 
 st.markdown("---")
@@ -93,11 +113,11 @@ def highlight_rows(row):
         return styles
     status = str(row["Progress"]).lower()
     if status == "completed":
-        styles = ["background-color:#d4f4dd;"] * len(row)
+        styles = ["background-color:#7BB661; color:white;"] * len(row)
     elif "Due date" in row.index:
         due = row["Due date"]
         if pd.notna(due) and pd.to_datetime(due) < pd.Timestamp.today():
-            styles = ["background-color:#f8d7da;"] * len(row)
+            styles = ["background-color:#f8d7da; color:black;"] * len(row)
     return styles
 
 # ======================================================
@@ -154,8 +174,10 @@ st.subheader(f"📋 {sheet_choice} — Preview ({df_main.shape[0]} rows)")
 st.dataframe(df_main.head(200))
 
 # ======================================================
-#   DASHBOARDS (if Tasks sheet exists)
+#   DASHBOARDS (Deezlo Colors)
 # ======================================================
+deezlo_colors = ["#F26522", "#FF9248", "#003049", "#7BB661", "#F9F9F9"]
+
 if "Tasks" in sheets:
     st.markdown("## 📊 Task Analytics")
 
@@ -164,19 +186,52 @@ if "Tasks" in sheets:
 
     # Pie chart - Progress distribution
     if "Progress" in tasks.columns:
-        fig = px.pie(tasks, names="Progress", title="Progress Distribution", hole=0.3)
+        fig = px.pie(
+            tasks,
+            names="Progress",
+            title="Progress Distribution",
+            hole=0.3,
+            color_discrete_sequence=deezlo_colors
+        )
+        fig.update_layout(
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font_color="#003049"
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     # Tasks per Bucket
     if "Bucket Name" in tasks.columns:
         agg = tasks["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name", "Count"]
-        fig2 = px.bar(agg, x="Bucket Name", y="Count", title="Tasks per Bucket")
+        fig2 = px.bar(
+            agg,
+            x="Bucket Name",
+            y="Count",
+            title="Tasks per Bucket",
+            color="Bucket Name",
+            color_discrete_sequence=deezlo_colors
+        )
+        fig2.update_layout(
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font_color="#003049"
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     # Priority distribution
     if "Priority" in tasks.columns:
-        fig3 = px.pie(tasks, names="Priority", title="Priority Distribution")
+        fig3 = px.pie(
+            tasks,
+            names="Priority",
+            title="Priority Distribution",
+            color_discrete_sequence=deezlo_colors
+        )
+        fig3.update_layout(
+            paper_bgcolor="white",
+            plot_bgcolor="white",
+            font_color="#003049"
+        )
         st.plotly_chart(fig3, use_container_width=True)
 
     # Overdue tasks table
@@ -192,7 +247,7 @@ if "Tasks" in sheets:
         else:
             st.info("No overdue tasks found.")
 
-    # Timeline (Gantt) — using full Task Name
+    # Timeline (Gantt)
     if {"Start date", "Due date", "Task Name"}.issubset(tasks.columns):
         timeline = tasks.dropna(subset=["Start date", "Due date", "Task Name"]).copy()
         if not timeline.empty:
@@ -202,9 +257,15 @@ if "Tasks" in sheets:
                 x_end="Due date",
                 y="Task Name",
                 color="Bucket Name" if "Bucket Name" in timeline.columns else None,
+                color_discrete_sequence=deezlo_colors,
                 title="Task Timeline (Start to Due)"
             )
             fig4.update_yaxes(autorange="reversed")
+            fig4.update_layout(
+                paper_bgcolor="white",
+                plot_bgcolor="white",
+                font_color="#003049"
+            )
             st.plotly_chart(fig4, use_container_width=True)
 
 # ======================================================
