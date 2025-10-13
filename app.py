@@ -81,7 +81,7 @@ else:
         k4.metric("Overdue", int(overdue))
 
     st.markdown("----")
-    st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
+    st.subheader(f"List: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
     st.dataframe(df_main.head(200))
 
     # If Tasks sheet selected, build the main dashboards
