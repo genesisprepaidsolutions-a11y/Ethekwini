@@ -1,9 +1,7 @@
 import os
-import time
 from datetime import datetime
 import pandas as pd
 import plotly.graph_objects as go
-import plotly.express as px
 import streamlit as st
 
 # ======================================================
@@ -26,11 +24,11 @@ st.markdown(
         color: #000000 !important;
     }
     [data-testid="stSidebar"] {
-        background: #00264d !important;  
-        border-right: 2px solid #001f3f;
+        background: #001f3f !important;  
+        border-right: 2px solid #001a33;
     }
     [data-testid="stHeader"], [data-testid="stToolbar"] {
-        background: #001f3f !important;
+        background: #001a33 !important;
         border-bottom: 1px solid #001a33;
     }
     h1, h2, h3, h4, h5, h6, label {
@@ -56,7 +54,7 @@ st.markdown(
         opacity: 0.5;
     }
     .stDownloadButton > button {
-        background: #001f3f !important;
+        background: #001a33 !important;
         color: #FFFFFF !important;
         border: none !important;
         border-radius: 8px !important;
@@ -68,10 +66,9 @@ st.markdown(
 )
 
 # ======================================================
-#   Sidebar
+#   Sidebar: Options and file path
 # ======================================================
 st.sidebar.header("Configuration")
-enable_animations = st.sidebar.checkbox("Enable animations", value=True)
 st.sidebar.markdown("---")
 st.sidebar.header("Data source")
 excel_path = st.sidebar.text_input("Excel file path", value="Ethekwini WS-7761 07 Oct 2025.xlsx")
@@ -163,7 +160,7 @@ st.subheader("📋 Data Preview")
 st.dataframe(df_main.head(200))
 
 # ======================================================
-#   TASK ANALYTICS (3 DIALS WITH NEEDLES & DARK BLUE)
+#   TASK ANALYTICS (3 DIALS)
 # ======================================================
 if "Tasks" in sheets:
     st.subheader("📊 Task Analytics")
@@ -176,7 +173,7 @@ if "Tasks" in sheets:
         inprogress_count = prog.eq("in progress").sum()
         not_started_count = prog.isin(["not started", "to do", "pending", "todo", ""]).sum()
 
-        def make_needle_gauge(title, value, total, color):
+        def make_gauge(title, value, total, color):
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=value,
@@ -192,28 +189,16 @@ if "Tasks" in sheets:
                         {'range': [0, total * 0.5], 'color': '#003366'},
                         {'range': [total * 0.5, total * 0.8], 'color': '#00264d'},
                         {'range': [total * 0.8, total], 'color': '#001a33'}
-                    ],
-                    'threshold': {
-                        'line': {'color': '#ffcc00', 'width': 6},
-                        'thickness': 0.75,
-                        'value': value
-                    }
+                    ]
                 }
             ))
             fig.update_layout(margin=dict(l=25, r=25, t=50, b=25), height=300, paper_bgcolor="#f0f2f6")
             return fig
 
         c1, c2, c3 = st.columns(3)
-        if enable_animations:
-            for pct in range(0, total_count + 1, max(1, total_count // 20)):
-                c1.plotly_chart(make_needle_gauge("Not Started", min(pct, not_started_count), total_count, "#3366cc"), use_container_width=True)
-                c2.plotly_chart(make_needle_gauge("In Progress", min(pct, inprogress_count), total_count, "#003366"), use_container_width=True)
-                c3.plotly_chart(make_needle_gauge("Completed", min(pct, completed_count), total_count, "#001a33"), use_container_width=True)
-                time.sleep(0.03)
-        else:
-            c1.plotly_chart(make_needle_gauge("Not Started", not_started_count, total_count, "#3366cc"), use_container_width=True)
-            c2.plotly_chart(make_needle_gauge("In Progress", inprogress_count, total_count, "#003366"), use_container_width=True)
-            c3.plotly_chart(make_needle_gauge("Completed", completed_count, total_count, "#001a33"), use_container_width=True)
+        c1.plotly_chart(make_gauge("Not Started", not_started_count, total_count, "#3366cc"), use_container_width=True)
+        c2.plotly_chart(make_gauge("In Progress", inprogress_count, total_count, "#003366"), use_container_width=True)
+        c3.plotly_chart(make_gauge("Completed", completed_count, total_count, "#001a33"), use_container_width=True)
 
 # ======================================================
 #   EXPORT SECTION
