@@ -74,20 +74,21 @@ else:
         notstarted = tasks['Progress'].str.lower().eq('not started').sum() if 'Progress' in tasks.columns else 0
         overdue = ((tasks['Due date'] < pd.Timestamp.today()) & (~tasks['Progress'].str.lower().eq('completed'))).sum() if 'Due date' in tasks.columns and 'Progress' in tasks.columns else 0
 
-        # Custom Gauge Function
+        # ===== Custom Gauge Function (Dark blue needle + % center) =====
         def create_gauge(value, total, title, colors):
+            pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=value,
-                number={'font': {'size': 32}},
+                mode="gauge+number+delta",
+                value=pct,
+                number={'suffix': "%", 'font': {'size': 36}},
                 title={'text': title, 'font': {'size': 20}},
                 gauge={
-                    'axis': {'range': [0, total], 'tickwidth': 1, 'tickcolor': "darkgray"},
-                    'bar': {'color': "white", 'thickness': 0.3},
+                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkgray"},
+                    'bar': {'color': "darkblue", 'thickness': 0.35},  # dark blue needle
                     'steps': [
-                        {'range': [0, total * 0.33], 'color': colors[0]},
-                        {'range': [total * 0.33, total * 0.66], 'color': colors[1]},
-                        {'range': [total * 0.66, total], 'color': colors[2]},
+                        {'range': [0, 33], 'color': colors[0]},
+                        {'range': [33, 66], 'color': colors[1]},
+                        {'range': [66, 100], 'color': colors[2]},
                     ],
                 }
             ))
@@ -124,13 +125,13 @@ else:
 
         st.subheader("Task Breakdown & Visuals")
 
-        # Removed pie chart here (per instruction)
-
-        # Tasks per Bucket
+        # Tasks per Bucket (with value labels)
         if 'Bucket Name' in tasks.columns:
             agg = tasks['Bucket Name'].value_counts().reset_index()
             agg.columns = ['Bucket Name', 'Count']
-            fig2 = px.bar(agg, x='Bucket Name', y='Count', title="Tasks per Bucket")
+            fig2 = px.bar(agg, x='Bucket Name', y='Count', title="Tasks per Bucket", text='Count')
+            fig2.update_traces(texttemplate='%{text}', textposition='outside')
+            fig2.update_layout(uniformtext_minsize=8, uniformtext_mode='hide')
             st.plotly_chart(fig2, use_container_width=True)
 
         # Priority distribution
