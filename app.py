@@ -73,7 +73,7 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        # ===================== SIMPLE GAUGE FUNCTION =====================
+        # ===================== SIMPLE CIRCULAR GAUGE =====================
         def create_simple_gauge(value, total, title, color):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
@@ -81,8 +81,8 @@ with tabs[0]:
                 value=pct,
                 number={'suffix':'%', 'font':{'size':36}},
                 gauge={
-                    'axis': {'range':[0,100]},
-                    'bar': {'color': color},
+                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor':'darkgray'},
+                    'bar': {'color': color, 'thickness':0.3},
                     'bgcolor': "#e6e6e6",
                     'steps': [
                         {'range':[0,100], 'color':'#f0f0f0'}
@@ -90,14 +90,26 @@ with tabs[0]:
                 },
                 title={'text': title, 'font':{'size':18}}
             ))
-            fig.update_layout(height=280, margin=dict(l=20,r=20,t=50,b=50), paper_bgcolor="rgba(0,0,0,0)")
+            fig.update_layout(
+                height=280,
+                margin=dict(l=20,r=20,t=50,b=50),
+                paper_bgcolor="rgba(0,0,0,0)"
+            )
             return fig
 
+        # Colors
+        colors_map = {
+            "Not Started": "#80ff80",
+            "In Progress": "#ffff80",
+            "Completed": "#80ccff",
+            "Overdue": "#ff8080"
+        }
+
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.plotly_chart(create_simple_gauge(notstarted, total, "Not Started", "#FF6666"), use_container_width=True)
-        with c2: st.plotly_chart(create_simple_gauge(inprogress, total, "In Progress", "#FFCC00"), use_container_width=True)
-        with c3: st.plotly_chart(create_simple_gauge(completed, total, "Completed", "#33CC33"), use_container_width=True)
-        with c4: st.plotly_chart(create_simple_gauge(overdue, total, "Overdue", "#990000"), use_container_width=True)
+        with c1: st.plotly_chart(create_simple_gauge(notstarted, total, "Not Started", colors_map["Not Started"]), use_container_width=True)
+        with c2: st.plotly_chart(create_simple_gauge(inprogress, total, "In Progress", colors_map["In Progress"]), use_container_width=True)
+        with c3: st.plotly_chart(create_simple_gauge(completed, total, "Completed", colors_map["Completed"]), use_container_width=True)
+        with c4: st.plotly_chart(create_simple_gauge(overdue, total, "Overdue", colors_map["Overdue"]), use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
