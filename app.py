@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+from PIL import Image
 
 st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
 
@@ -23,12 +24,12 @@ def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
 sheets = load_data()
 
 # ===================== SIDEBAR FILTERS =====================
-st.sidebar.header("Data & Filters")
+st.sidebar.header("Filters & Settings")
 
 sheet_choice = st.sidebar.selectbox(
-    "Main sheet to view",
+    "Sheet to view",
     list(sheets.keys()),
-    index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0,
+    index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0
 )
 
 search_task = st.sidebar.text_input("Search Task name (contains)")
@@ -44,18 +45,18 @@ if not df_main.empty:
     # Convert date columns
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
-    
+
     # Search filter
     if search_task:
         df_main = df_main[df_main[df_main.columns[0]].astype(str).str.contains(search_task, case=False, na=False)]
-    
+
     # Date filters
     if date_from and "Start date" in df_main.columns:
         df_main = df_main[df_main["Start date"] >= pd.to_datetime(date_from)]
     if date_to and "Due date" in df_main.columns:
         df_main = df_main[df_main["Due date"] <= pd.to_datetime(date_to)]
-    
-    # Sidebar filters based on unique values
+
+    # Sidebar dynamic filters
     bucket_filter = st.sidebar.multiselect("Bucket Name", options=df_main["Bucket Name"].unique() if "Bucket Name" in df_main.columns else [])
     priority_filter = st.sidebar.multiselect("Priority", options=df_main["Priority"].unique() if "Priority" in df_main.columns else [])
     progress_filter = st.sidebar.multiselect("Progress", options=df_main["Progress"].unique() if "Progress" in df_main.columns else [])
@@ -67,8 +68,9 @@ if not df_main.empty:
     if progress_filter and "Progress" in df_main.columns:
         df_main = df_main[df_main["Progress"].isin(progress_filter)]
 
-# ===================== KPI SECTION =====================
+# ===================== KPI CARDS =====================
 st.subheader("Key Performance Indicators")
+
 if "Tasks" in sheets:
     tasks = sheets["Tasks"].copy()
     for col in ["Start date", "Due date", "Completed Date"]:
@@ -81,48 +83,41 @@ if "Tasks" in sheets:
     notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
     overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-    def create_gauge(value, total, title, colors):
-        pct = (value / total * 100) if total > 0 else 0
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=pct,
-            number={"suffix":"%", "font":{"size":40,"color":"darkblue"}, "valueformat":".1f"},
-            gauge={
-                "axis":{"range":[0,100], "tickwidth":1,"tickcolor":"darkgray"},
-                "bar":{"color":"darkblue","thickness":0.35},
-                "steps":[{"range":[0,33],"color":colors[0]},{"range":[33,66],"color":colors[1]},{"range":[66,100],"color":colors[2]}]
-            }
-        ))
-        fig.add_annotation(text=f"<b>{title}</b>", x=0.5, y=1.25, showarrow=False, font=dict(size=18,color="darkblue"), xanchor="center")
-        fig.add_annotation(text=f"{value} of {total} tasks", x=0.5, y=-0.25, showarrow=False, font=dict(size=14,color="darkblue"), xanchor="center")
-        fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor="rgba(0,0,0,0)", font={"color":"white"})
-        return fig
+    # Trend calculation example
+    prev_week = pd.Timestamp.today() - timedelta(days=7)
+    completed_prev = ((tasks["Progress"].str.lower().eq("completed")) & (tasks["Completed Date"] < prev_week)).sum() if "Completed Date" in tasks.columns else 0
+    trend = (completed - completed_prev)/completed_prev*100 if completed_prev else 0
 
     c1, c2, c3, c4 = st.columns(4)
-    with c1: st.plotly_chart(create_gauge(notstarted, total, "Not Started", ["green","yellow","red"]), use_container_width=True)
-    with c2: st.plotly_chart(create_gauge(inprogress, total, "In Progress", ["red","yellow","green"]), use_container_width=True)
-    with c3: st.plotly_chart(create_gauge(completed, total, "Completed", ["red","yellow","green"]), use_container_width=True)
-    with c4: st.plotly_chart(create_gauge(overdue, total, "Overdue", ["yellow","red","darkred"]), use_container_width=True)
+    with c1:
+        st.metric("Not Started", f"{notstarted}", delta=f"{notstarted/total*100:.1f}%" if total else None, delta_color="inverse")
+    with c2:
+        st.metric("In Progress", f"{inprogress}", delta=f"{inprogress/total*100:.1f}%" if total else None)
+    with c3:
+        st.metric("Completed", f"{completed}", delta=f"{trend:.1f}%" if total else None)
+    with c4:
+        st.metric("Overdue", f"{overdue}", delta=f"{overdue/total*100:.1f}%" if total else None, delta_color="inverse")
 
 # ===================== TASK BREAKDOWN =====================
-st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
+st.subheader(f"Task Table: {sheet_choice} ({df_main.shape[0]} rows)")
 
-# Conditional formatting
 if "Due date" in df_main.columns and "Progress" in df_main.columns:
     def highlight_status(row):
-        color = ""
         if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
-            color = "background-color: #ffcccc"  # red
+            color = "background-color: #ffcccc"  # overdue red
         elif row["Progress"].lower() == "in progress":
             color = "background-color: #fff0b3"  # yellow
         elif row["Progress"].lower() == "completed":
-            color = "background-color: #ccffcc"  # green
+            color = "background-color: #a3f7a3"  # green
+        else:
+            color = ""
         return [color]*len(row)
+
     st.dataframe(df_main.style.apply(highlight_status, axis=1))
 else:
     st.dataframe(df_main)
 
-# Tasks per Bucket with shades of blue
+# ===================== TASKS PER BUCKET =====================
 if "Bucket Name" in df_main.columns:
     agg = df_main["Bucket Name"].value_counts().reset_index()
     agg.columns = ["Bucket Name","Count"]
@@ -131,12 +126,12 @@ if "Bucket Name" in df_main.columns:
     fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
     st.plotly_chart(fig_bucket, use_container_width=True)
 
-# Priority Pie with shades of blue
+# ===================== PRIORITY PIE =====================
 if "Priority" in df_main.columns:
-    fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution", color="Priority",
-                     color_discrete_sequence=px.colors.sequential.Blues)
+    fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution",
+                     color="Priority", color_discrete_sequence=px.colors.sequential.Blues_r)
     fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-    fig_pie.update_layout(showlegend=False)
+    fig_pie.update_layout(showlegend=True)
     st.plotly_chart(fig_pie, use_container_width=True)
 
 # ===================== TIMELINE =====================
@@ -145,7 +140,6 @@ if "Start date" in df_main.columns and "Due date" in df_main.columns:
     timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
     if not timeline.empty:
         timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-        # Map progress to colors
         progress_color = {"not started":"red","in progress":"yellow","completed":"green"}
         timeline["color"] = timeline["Progress"].str.lower().map(progress_color)
         fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date", y="task_short",
