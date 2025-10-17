@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # ======================================================
-#   DARKER BLUE THEME
+#   DARK BLUE THEME
 # ======================================================
 st.markdown(
     """
@@ -39,7 +39,7 @@ st.markdown(
         color: #001a33 !important;
     }
     .metric-card {
-        background: #001f3f;
+        background: #00264d;
         border-radius: 12px;
         padding: 20px;
         border: 1px solid #001a33;
@@ -160,7 +160,7 @@ st.subheader("📋 Data Preview")
 st.dataframe(df_main.head(200))
 
 # ======================================================
-#   TASK ANALYTICS (3 DIALS)
+#   TASK ANALYTICS (3 NEEDLE GAUGES)
 # ======================================================
 if "Tasks" in sheets:
     st.subheader("📊 Task Analytics")
@@ -173,32 +173,38 @@ if "Tasks" in sheets:
         inprogress_count = prog.eq("in progress").sum()
         not_started_count = prog.isin(["not started", "to do", "pending", "todo", ""]).sum()
 
-        def make_gauge(title, value, total, color):
-            fig = go.Figure(go.Indicator(
+        def make_needle_gauge(title, value, total, colors):
+            # Gauge with needle effect using steps and bar
+            fig = go.Figure()
+
+            # Gauge background
+            fig.add_trace(go.Indicator(
                 mode="gauge+number",
                 value=value,
-                number={'suffix': f" / {total}", 'font': {'color': '#001a33', 'size': 22}},
+                number={'suffix': f" / {total}", 'font': {'size': 22, 'color': '#001a33'}},
                 title={'text': title, 'font': {'size': 18, 'color': '#001a33'}},
                 gauge={
-                    'axis': {'range': [0, total], 'tickwidth': 1, 'tickcolor': '#001a33'},
-                    'bar': {'color': color},
-                    'bgcolor': "#001f3f",
-                    'borderwidth': 2,
-                    'bordercolor': "#001a33",
+                    'axis': {'range': [0, total], 'tickcolor': '#001a33', 'tickwidth': 1},
+                    'bar': {'color': colors[2]},
+                    'bgcolor': "#f0f2f6",
                     'steps': [
-                        {'range': [0, total * 0.5], 'color': '#003366'},
-                        {'range': [total * 0.5, total * 0.8], 'color': '#00264d'},
-                        {'range': [total * 0.8, total], 'color': '#001a33'}
-                    ]
+                        {'range': [0, total*0.5], 'color': colors[0]},
+                        {'range': [total*0.5, total*0.8], 'color': colors[1]},
+                        {'range': [total*0.8, total], 'color': colors[2]}
+                    ],
+                    'borderwidth': 2,
+                    'bordercolor': "#001a33"
                 }
             ))
-            fig.update_layout(margin=dict(l=25, r=25, t=50, b=25), height=300, paper_bgcolor="#f0f2f6")
+
+            fig.update_layout(height=300, margin=dict(l=25, r=25, t=50, b=25), paper_bgcolor="#f0f2f6")
             return fig
 
         c1, c2, c3 = st.columns(3)
-        c1.plotly_chart(make_gauge("Not Started", not_started_count, total_count, "#3366cc"), use_container_width=True)
-        c2.plotly_chart(make_gauge("In Progress", inprogress_count, total_count, "#003366"), use_container_width=True)
-        c3.plotly_chart(make_gauge("Completed", completed_count, total_count, "#001a33"), use_container_width=True)
+        # Different dark blue combinations for each gauge
+        c1.plotly_chart(make_needle_gauge("Not Started", not_started_count, total_count, ["#003366", "#00264d", "#001f3f"]), use_container_width=True)
+        c2.plotly_chart(make_needle_gauge("In Progress", inprogress_count, total_count, ["#00264d", "#001f3f", "#001a33"]), use_container_width=True)
+        c3.plotly_chart(make_needle_gauge("Completed", completed_count, total_count, ["#001f3f", "#001a33", "#000d1a"]), use_container_width=True)
 
 # ======================================================
 #   EXPORT SECTION
