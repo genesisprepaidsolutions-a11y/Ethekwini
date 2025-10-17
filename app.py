@@ -1,5 +1,5 @@
 # ======================================================
-#   KPIs + ANALOG-STYLE GAUGES (gradient + % display)
+#   KPIs + ANALOG-STYLE GAUGES (smooth gradient version)
 # ======================================================
 if isinstance(sheets, dict) and "Tasks" in sheets:
     st.subheader("Key Performance Indicators")
@@ -22,8 +22,7 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
     notstarted = tasks['Progress'].str.lower().eq('not started').sum()
     overdue = 0
     if 'Due date' in tasks.columns:
-        overdue = ((tasks['Due date'] < pd.Timestamp.today()) &
-                   (~tasks['Progress'].str.lower().eq('completed'))).sum()
+        overdue = ((tasks['Due date'] < pd.Timestamp.today()) & (~tasks['Progress'].str.lower().eq('completed'))).sum()
 
     gauges = [
         {"label": "Not Started", "value": notstarted, "start_color": "#00FF00", "end_color": "#FF0000"},  # green→red
@@ -34,7 +33,7 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
 
     fig_gauges = go.Figure()
 
-    def create_gradient_steps(start_hex, end_hex, steps_count=40):
+    def create_gradient_steps(start_hex, end_hex, steps_count=30):
         """Generate a smooth color gradient list between two hex colors."""
         import matplotlib.colors as mcolors
         start_rgb = mcolors.hex2color(start_hex)
@@ -50,7 +49,7 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
         return gradient_steps
 
     for i, g in enumerate(gauges):
-        gradient_colors = create_gradient_steps(g["start_color"], g["end_color"], steps_count=40)
+        gradient_colors = create_gradient_steps(g["start_color"], g["end_color"], steps_count=30)
         steps = []
         for j, color in enumerate(gradient_colors):
             steps.append({
@@ -61,16 +60,14 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
                 'color': color
             })
 
-        percent = round((g["value"] / total_safe) * 100, 1)
-
         fig_gauges.add_trace(go.Indicator(
             mode="gauge+number",
-            value=percent,
+            value=g["value"],
             title={'text': f"<b>{g['label']}</b>", 'font': {'size': 16, 'color': '#003366'}},
-            number={'suffix': "%", 'font': {'size': 22, 'color': '#003366'}},
+            number={'font': {'size': 20, 'color': '#003366'}},
             domain={'x': [i * 0.25, (i + 1) * 0.25], 'y': [0, 1]},
             gauge={
-                'axis': {'range': [0, 100], 'tickwidth': 0, 'visible': False},
+                'axis': {'range': [0, total_safe], 'tickwidth': 1, 'tickcolor': "#666"},
                 'bar': {'color': 'rgba(0,0,0,0)'},
                 'bgcolor': "white",
                 'borderwidth': 3,
@@ -79,7 +76,7 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
                 'threshold': {
                     'line': {'color': "#002B5B", 'width': 5},  # dark blue needle
                     'thickness': 0.9,
-                    'value': percent
+                    'value': g["value"]
                 }
             }
         ))
