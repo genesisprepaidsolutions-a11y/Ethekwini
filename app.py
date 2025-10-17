@@ -1,10 +1,10 @@
 # ======================================================
 #   KPI SECTION — Gradient-style semi-circular gauges
 # ======================================================
-if isinstance(sheets, dict) and "Tasks" in sheets:
+if 'Tasks' in sheets:
     st.subheader("Key Performance Indicators")
 
-    tasks = sheets["Tasks"].copy()
+    tasks = sheets['Tasks'].copy()
     for col in ["Start date", "Due date", "Completed Date"]:
         if col in tasks.columns:
             tasks[col] = pd.to_datetime(tasks[col], dayfirst=True, errors='coerce')
@@ -22,9 +22,9 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
     notstarted = tasks['Progress'].str.lower().eq('not started').sum()
     overdue = 0
     if 'Due date' in tasks.columns:
-        overdue = ((tasks['Due date'] < pd.Timestamp.today()) & (~tasks['Progress'].str.lower().eq('completed'))).sum()
+        overdue = ((tasks['Due date'] < pd.Timestamp.today()) &
+                   (~tasks['Progress'].str.lower().eq('completed'))).sum()
 
-    # Calculate percentages for gradient display
     gauges = [
         {"label": "Not Started", "value": notstarted / total_safe * 100},
         {"label": "In Progress", "value": inprogress / total_safe * 100},
@@ -32,7 +32,6 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
         {"label": "Overdue", "value": overdue / total_safe * 100},
     ]
 
-    # Create 4 gradient gauges in one row
     cols = st.columns(4)
     for i, g in enumerate(gauges):
         fig = go.Figure(go.Indicator(
@@ -54,8 +53,7 @@ if isinstance(sheets, dict) and "Tasks" in sheets:
                     'thickness': 0.75,
                     'value': g["value"]
                 },
-                'shape': "angular",
-                'angle': 180  # makes it semi-circular
+                'shape': "angular"
             }
         ))
 
