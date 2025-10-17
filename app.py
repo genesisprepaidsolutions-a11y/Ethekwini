@@ -34,7 +34,6 @@ date_from = st.sidebar.date_input("Start date from", value=None)
 date_to = st.sidebar.date_input("Due date to", value=None)
 bucket_filter = st.sidebar.multiselect("Bucket Name", [])
 priority_filter = st.sidebar.multiselect("Priority", [])
-progress_filter = st.sidebar.multiselect("Progress", [])
 show_logo = st.sidebar.checkbox("Show logo (if file exists)", value=False)
 
 # ===================== MAIN DATAFRAME =====================
@@ -47,7 +46,7 @@ if not df_main.empty:
         except Exception:
             pass
 
-    # Apply sidebar filters
+    # Sidebar filters
     if search_task:
         df_main = df_main[df_main[df_main.columns[0]].astype(str).str.contains(search_task, case=False, na=False)]
     if date_from and "Start date" in df_main.columns:
@@ -58,13 +57,18 @@ if not df_main.empty:
         df_main = df_main[df_main["Bucket Name"].isin(bucket_filter)]
     if priority_filter and "Priority" in df_main.columns:
         df_main = df_main[df_main["Priority"].isin(priority_filter)]
-    if progress_filter and "Progress" in df_main.columns:
-        df_main = df_main[df_main["Progress"].isin(progress_filter)]
+
+# ===================== PROGRESS FILTER BUTTONS =====================
+if "Progress" in df_main.columns:
+    st.markdown("### Filter by Progress")
+    progress_options = ["Not Started", "In Progress", "Completed"]
+    selected_progress = st.multiselect("Select Progress Status", progress_options, default=progress_options)
+    df_main = df_main[df_main["Progress"].isin(selected_progress)]
 
 # ===================== KPI SECTION =====================
 if "Tasks" in sheets:
     st.subheader("Key Performance Indicators")
-    tasks = sheets["Tasks"].copy()
+    tasks = df_main.copy()  # Apply current filtered dataframe for KPIs
     for col in ["Start date","Due date","Completed Date"]:
         if col in tasks.columns:
             tasks[col] = pd.to_datetime(tasks[col], dayfirst=True, errors="coerce")
