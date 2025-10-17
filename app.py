@@ -86,7 +86,7 @@ else:
         df_main = df_main[df_main["Due date"] <= pd.to_datetime(date_to)]
     
     # ======================================================
-    #   KPIs
+    #   KPIs + SPEEDOMETER DIALS
     # ======================================================
     if "Tasks" in sheets:
         st.subheader("Key Performance Indicators")
@@ -101,37 +101,24 @@ else:
         notstarted = tasks['Progress'].str.lower().eq('not started').sum() if 'Progress' in tasks.columns else 0
         overdue = ((tasks['Due date'] < pd.Timestamp.today()) & (~tasks['Progress'].str.lower().eq('completed'))).sum() if 'Due date' in tasks.columns and 'Progress' in tasks.columns else 0
 
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Total Tasks", total)
-        k2.metric("Completed", completed)
-        k3.metric("In Progress", inprogress)
-        k4.metric("Overdue", int(overdue))
+        # Define dial colors
+        colors = ['#A7C7E7', '#4682B4', '#003366', '#B22222']  # red for overdue
 
-    st.markdown("----")
-    st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-    st.dataframe(df_main.head(200))
-
-    # ======================================================
-    #   SPEEDOMETER DASHBOARD
-    # ======================================================
-    if sheet_choice == "Tasks" or "Tasks" in sheets:
-        st.subheader("Task Progress Overview (Speedometers)")
-        fig_gauges = go.Figure()
-
-        # Gauge colors: light to dark blue
-        colors = ['#A7C7E7', '#4682B4', '#003366']
-
+        # Define gauges
         gauges = [
             {"label": "Not Started", "value": notstarted, "color": colors[0]},
             {"label": "In Progress", "value": inprogress, "color": colors[1]},
-            {"label": "Completed", "value": completed, "color": colors[2]}
+            {"label": "Completed", "value": completed, "color": colors[2]},
+            {"label": "Overdue", "value": overdue, "color": colors[3]},
         ]
 
+        # Build unified gauge figure
+        fig_gauges = go.Figure()
         for i, g in enumerate(gauges):
             fig_gauges.add_trace(go.Indicator(
                 mode="gauge+number",
                 value=g["value"],
-                domain={'x': [i * 0.33, (i + 1) * 0.33], 'y': [0, 1]},
+                domain={'x': [i * 0.25, (i + 1) * 0.25], 'y': [0, 1]},
                 title={'text': g["label"], 'font': {'size': 18, 'color': '#003366'}},
                 gauge={
                     'axis': {'range': [0, total if total > 0 else 1], 'tickwidth': 1, 'tickcolor': "#003366"},
@@ -147,17 +134,30 @@ else:
             ))
 
         fig_gauges.update_layout(
-            grid={'rows': 1, 'columns': 3},
-            template=None,
+            grid={'rows': 1, 'columns': 4},
             paper_bgcolor="white",
             plot_bgcolor="white",
-            height=400
+            height=400,
+            margin=dict(l=20, r=20, t=20, b=20)
         )
         st.plotly_chart(fig_gauges, use_container_width=True)
 
-        # ======================================================
-        #   OTHER CHARTS
-        # ======================================================
+    # ======================================================
+    #   SHEET PREVIEW
+    # ======================================================
+    st.markdown("----")
+    st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
+    st.dataframe(df_main.head(200))
+
+    # ======================================================
+    #   ADDITIONAL VISUALS
+    # ======================================================
+    if sheet_choice == "Tasks" or "Tasks" in sheets:
+        tasks = sheets["Tasks"].copy()
+        for col in ["Start date", "Due date", "Completed Date"]:
+            if col in tasks.columns:
+                tasks[col] = pd.to_datetime(tasks[col], dayfirst=True, errors='coerce')
+
         if 'Bucket Name' in tasks.columns:
             agg = tasks['Bucket Name'].value_counts().reset_index()
             agg.columns = ['Bucket Name', 'Count']
@@ -174,7 +174,6 @@ else:
             )
             st.plotly_chart(fig2, use_container_width=True)
 
-        # Overdue Tasks
         if 'Due date' in tasks.columns and 'Progress' in tasks.columns:
             overdue_df = tasks[(tasks['Due date'] < pd.Timestamp.today()) & (tasks['Progress'].str.lower() != 'completed')]
             st.markdown("#### Overdue Tasks")
