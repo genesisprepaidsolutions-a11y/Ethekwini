@@ -75,7 +75,15 @@ with tabs[0]:
         last_completed_count = tasks[tasks["Completed Date"].notna() & (tasks["Completed Date"] < pd.Timestamp.today())].shape[0]
         trend_completed = "▲" if completed > last_completed_count else "▼"
 
-        # Custom gauge function with fading colors
+        # ===================== KPI CARDS =====================
+        st.markdown("### Dashboard Summary")
+        k1, k2, k3, k4 = st.columns(4)
+        k1.metric(label="Not Started", value=notstarted, delta=f"{notstarted/total*100:.1f}%" if total>0 else "0%", delta_color="inverse")
+        k2.metric(label="In Progress", value=inprogress, delta=f"{inprogress/total*100:.1f}%" if total>0 else "0%", delta_color="normal")
+        k3.metric(label="Completed", value=completed, delta=f"{completed/total*100:.1f}% {trend_completed}", delta_color="normal")
+        k4.metric(label="Overdue", value=overdue, delta=f"{overdue/total*100:.1f}%" if total>0 else "0%", delta_color="inverse")
+
+        # ===================== GAUGE CHARTS =====================
         def create_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
@@ -85,11 +93,7 @@ with tabs[0]:
                 gauge={
                     "axis":{"range":[0,100], "tickwidth":1,"tickcolor":"darkgray"},
                     "bar":{"color":"darkblue","thickness":0.35},
-                    "steps":[
-                        {"range":[0,33],"color":colors[0]},
-                        {"range":[33,66],"color":colors[1]},
-                        {"range":[66,100],"color":colors[2]}
-                    ]
+                    "steps":[{"range":[0,33],"color":colors[0]},{"range":[33,66],"color":colors[1]},{"range":[66,100],"color":colors[2]}]
                 }
             ))
             fig.add_annotation(text=f"<b>{title}</b>", x=0.5, y=1.25, showarrow=False, font=dict(size=18,color="darkblue"), xanchor="center")
@@ -97,7 +101,7 @@ with tabs[0]:
             fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor="rgba(0,0,0,0)", font={"color":"white"})
             return fig
 
-        # Lighter gradient colors
+        # Lighter fading gradients
         not_started_colors = ["#d0f0c0", "#fef9b0", "#ffb3b3"]
         in_progress_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
         completed_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
@@ -148,7 +152,6 @@ with tabs[2]:
         timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
         if not timeline.empty:
             timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            # Map colors by progress
             progress_color_map = {"Not Started":"red","In Progress":"yellow","Completed":"green"}
             timeline["color_map"] = timeline["Progress"].map(progress_color_map).fillna("gray")
             fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date",
