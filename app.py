@@ -136,51 +136,14 @@ with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
     display_df = st.session_state.get("selected_tasks", df_main)
 
-    # Gradient conditional formatting
-    if not display_df.empty and "Due date" in display_df.columns and "Progress" in display_df.columns:
+    # Gradient conditional formatting (always returns valid CSS)
+    if not display_df.empty:
         def highlight_status(row):
-            color = ""
-            if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
-                color = "#ffcccc"  # overdue
-            elif row["Progress"].lower() == "in progress":
-                color = "#fff0b3"
-            elif row["Progress"].lower() == "completed":
-                color = "#ccffcc"
-            return [color]*len(row)
-        st.dataframe(display_df.style.apply(highlight_status, axis=1))
-    else:
-        st.dataframe(display_df)
-
-    # Interactive bucket chart
-    if "Bucket Name" in display_df.columns:
-        agg = display_df["Bucket Name"].value_counts().reset_index()
-        agg.columns = ["Bucket Name","Count"]
-        fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket", color_discrete_sequence=bar_colors)
-        fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
-        clicked = st.plotly_chart(fig_bucket, use_container_width=True)
-
-    # Interactive priority pie
-    if "Priority" in display_df.columns:
-        fig_pie = px.pie(display_df, names="Priority", title="Priority Distribution", color_discrete_sequence=pie_colors)
-        fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-        fig_pie.update_layout(showlegend=False)
-        st.plotly_chart(fig_pie, use_container_width=True)
-
-# ===================== TIMELINE TAB =====================
-with tabs[2]:
-    if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
-        if not timeline.empty:
-            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date", y="task_short", color="Progress", title="Task Timeline", color_discrete_sequence=bar_colors, hover_data=["Bucket Name","Priority"])
-            fig_tl.update_yaxes(autorange="reversed")
-            fig_tl.update_layout(paper_bgcolor=bg_color, plot_bgcolor=bg_color, font_color=text_color)
-            st.plotly_chart(fig_tl, use_container_width=True)
-    else:
-        st.info("Timeline data not available.")
-
-# ===================== EXPORT TAB =====================
-with tabs[3]:
-    st.subheader("Export Filtered Data")
-    csv = display_df.to_csv(index=False).encode("utf-8")
-    st.download_button("Download current view as CSV", csv, file_name=f"{sheet_choice}_export.csv", mime="text/csv")
+            color_list = []
+            for _, cell in row.items():
+                if "Progress" in row.index and "Due date" in row.index:
+                    if row["Progress"].lower() == "completed":
+                        color_list.append("background-color: #ccffcc")
+                    elif row["Progress"].lower() == "in progress":
+                        color_list.append("background-color: #fff0b3")
+                    elif pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress]()
