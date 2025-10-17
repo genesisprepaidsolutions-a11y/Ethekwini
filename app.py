@@ -73,6 +73,10 @@ if not df_main.empty:
     if progress_filter and "Progress" in df_main.columns:
         df_main = df_main[df_main["Progress"].isin(progress_filter)]
 
+# Initialize session state for drill-down tasks
+if "selected_tasks" not in st.session_state:
+    st.session_state["selected_tasks"] = pd.DataFrame()
+
 # ===================== TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export"])
 selected_tasks = pd.DataFrame()
@@ -134,13 +138,10 @@ with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
 
     # Display drill-down from KPI if exists
-    if "selected_tasks" in st.session_state:
-        display_df = st.session_state["selected_tasks"]
-    else:
-        display_df = df_main
+    display_df = st.session_state.get("selected_tasks", df_main)
 
-    # Conditional formatting
-    if "Due date" in display_df.columns and "Progress" in display_df.columns:
+    # Conditional formatting with safety checks
+    if not display_df.empty and "Due date" in display_df.columns and "Progress" in display_df.columns:
         def highlight_status(row):
             color = ""
             if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
@@ -154,14 +155,13 @@ with tabs[1]:
     else:
         st.dataframe(display_df)
 
-    # Tasks per Bucket with clickable filtering
+    # Tasks per Bucket
     if "Bucket Name" in display_df.columns:
         agg = display_df["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name","Count"]
         fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket", color_discrete_sequence=bar_colors)
         fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
-        clicked = st.plotly_chart(fig_bucket, use_container_width=True)
-        # Note: Streamlit doesn't capture plotly click events natively without Dash; using buttons for drill-down is simplest
+        st.plotly_chart(fig_bucket, use_container_width=True)
 
     # Priority Pie
     if "Priority" in display_df.columns:
