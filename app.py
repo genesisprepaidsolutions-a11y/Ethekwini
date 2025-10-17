@@ -108,7 +108,7 @@ else:
                     value=pct,
                     number={
                         "suffix": "%",
-                        "font": {"size": 40, "color": "white"},
+                        "font": {"size": 40, "color": "darkblue"},
                         "valueformat": ".1f",
                     },
                     gauge={
