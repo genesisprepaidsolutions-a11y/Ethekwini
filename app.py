@@ -99,7 +99,7 @@ else:
             else 0
         )
 
-        # ===== Custom Gauge Function (Dark blue needle + visible % in center) =====
+        # ===== Custom Gauge Function (with labels above and below) =====
         def create_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(
@@ -111,7 +111,6 @@ else:
                         "font": {"size": 40, "color": "white"},
                         "valueformat": ".1f",
                     },
-                    title={"text": title, "font": {"size": 20, "color": "white"}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "darkgray"},
                         "bar": {"color": "darkblue", "thickness": 0.35},
@@ -123,59 +122,54 @@ else:
                     },
                 )
             )
+
+            # Label above the gauge
+            fig.add_annotation(
+                text=f"<b>{title}</b>",
+                x=0.5, y=1.25,
+                showarrow=False,
+                font=dict(size=18, color="darkblue"),
+                xanchor="center"
+            )
+
+            # Label below the gauge (task count)
+            fig.add_annotation(
+                text=f"{value} of {total} tasks",
+                x=0.5, y=-0.25,
+                showarrow=False,
+                font=dict(size=14, color="darkblue"),
+                xanchor="center"
+            )
+
             fig.update_layout(
-                margin=dict(l=10, r=10, t=50, b=10),
-                height=250,
+                margin=dict(l=10, r=10, t=70, b=50),
+                height=270,
                 paper_bgcolor="rgba(0,0,0,0)",
                 font={"color": "white"},
             )
             return fig
 
-        # ===== Gauges with color-coded counts underneath =====
+        # Gauges
         c1, c2, c3, c4 = st.columns(4)
-
         with c1:
             st.plotly_chart(
                 create_gauge(notstarted, total, "Not Started", ["green", "yellow", "red"]),
                 use_container_width=True,
             )
-            st.markdown(
-                f"<p style='text-align:center; color:orange; font-size:18px;'>"
-                f"{notstarted} of {total} tasks</p>",
-                unsafe_allow_html=True,
-            )
-
         with c2:
             st.plotly_chart(
                 create_gauge(inprogress, total, "In Progress", ["red", "yellow", "green"]),
                 use_container_width=True,
             )
-            st.markdown(
-                f"<p style='text-align:center; color:yellow; font-size:18px;'>"
-                f"{inprogress} of {total} tasks</p>",
-                unsafe_allow_html=True,
-            )
-
         with c3:
             st.plotly_chart(
                 create_gauge(completed, total, "Completed", ["red", "yellow", "green"]),
                 use_container_width=True,
             )
-            st.markdown(
-                f"<p style='text-align:center; color:lightgreen; font-size:18px;'>"
-                f"{completed} of {total} tasks</p>",
-                unsafe_allow_html=True,
-            )
-
         with c4:
             st.plotly_chart(
                 create_gauge(overdue, total, "Overdue", ["yellow", "red", "darkred"]),
                 use_container_width=True,
-            )
-            st.markdown(
-                f"<p style='text-align:center; color:red; font-size:18px;'>"
-                f"{overdue} of {total} tasks</p>",
-                unsafe_allow_html=True,
             )
 
     # ========================================================
