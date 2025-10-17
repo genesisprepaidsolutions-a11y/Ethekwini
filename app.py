@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
 
+# ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
 st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761 Dashboard</h1>", unsafe_allow_html=True)
 
@@ -23,8 +24,11 @@ sheets = load_data()
 
 # ===================== SIDEBAR FILTERS =====================
 st.sidebar.header("Data & Filters")
-sheet_choice = st.sidebar.selectbox("Main sheet to view", list(sheets.keys()),
-                                    index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0)
+sheet_choice = st.sidebar.selectbox(
+    "Main sheet to view",
+    list(sheets.keys()),
+    index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0
+)
 search_task = st.sidebar.text_input("Search Task name (contains)")
 date_from = st.sidebar.date_input("Start date from", value=None)
 date_to = st.sidebar.date_input("Due date to", value=None)
@@ -72,42 +76,51 @@ with tabs[0]:
         last_completed_count = tasks[tasks["Completed Date"].notna() & (tasks["Completed Date"] < pd.Timestamp.today())].shape[0]
         trend_completed = "▲" if completed > last_completed_count else "▼"
 
-        # ===================== MODERN GAUGE FUNCTION =====================
-        def create_modern_gauge(value, total, title, colors):
+        # ===================== MODERN CIRCULAR 3D GAUGE =====================
+        def create_circular_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
                 mode="gauge+number+delta",
                 value=pct,
+                number={'suffix':'%', 'font':{'size':36}},
                 delta={'reference': pct*0.8, 'increasing': {'color': 'green'}, 'decreasing': {'color': 'red'}},
-                title={'text': f"<b>{title}</b>", 'font': {'size': 18}},
-                number={'suffix': '%', 'font': {'size': 36}},
                 gauge={
-                    'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "darkgray"},
-                    'bar': {'color': "darkblue", 'thickness': 0.3},
+                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor':'darkgray'},
+                    'bar': {'color':'darkblue', 'thickness':0.25},
+                    'bgcolor':'#e6e6e6',
                     'steps': [
-                        {'range': [0, 33], 'color': colors[0]},
-                        {'range': [33, 66], 'color': colors[1]},
-                        {'range': [66, 100], 'color': colors[2]}
+                        {'range':[0,33], 'color':colors[0]},
+                        {'range':[33,66], 'color':colors[1]},
+                        {'range':[66,100], 'color':colors[2]}
                     ],
-                    'borderwidth': 3,
-                    'bordercolor': "#444",
-                    'bgcolor': "#f0f0f0",
-                }
+                    'borderwidth':3,
+                    'bordercolor':'#444',
+                    'threshold':{
+                        'line':{'color':'black','width':4},
+                        'thickness':0.75,
+                        'value':pct
+                    }
+                },
+                title={'text': f"<b>{title}</b>", 'font':{'size':18}}
             ))
-            fig.update_layout(height=280, margin=dict(l=20,r=20,t=50,b=50), paper_bgcolor="rgba(0,0,0,0)")
+            fig.update_layout(
+                margin=dict(l=20,r=20,t=50,b=50),
+                height=280,
+                paper_bgcolor="rgba(0,0,0,0)"
+            )
             return fig
 
-        # Brighter, smooth gradient colors
+        # Color gradients
         not_started_colors = ["#80ff80", "#d0ff80", "#ff9999"]
         in_progress_colors = ["#ff9999", "#ffff80", "#80ff80"]
         completed_colors = ["#80ff80", "#ffff80", "#ff9999"]
         overdue_colors = ["#ffff80", "#ff9999", "#cc0000"]
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.plotly_chart(create_modern_gauge(notstarted, total, "Not Started", not_started_colors), use_container_width=True)
-        with c2: st.plotly_chart(create_modern_gauge(inprogress, total, "In Progress", in_progress_colors), use_container_width=True)
-        with c3: st.plotly_chart(create_modern_gauge(completed, total, "Completed", completed_colors), use_container_width=True)
-        with c4: st.plotly_chart(create_modern_gauge(overdue, total, "Overdue", overdue_colors), use_container_width=True)
+        with c1: st.plotly_chart(create_circular_gauge(notstarted, total, "Not Started", not_started_colors), use_container_width=True)
+        with c2: st.plotly_chart(create_circular_gauge(inprogress, total, "In Progress", in_progress_colors), use_container_width=True)
+        with c3: st.plotly_chart(create_circular_gauge(completed, total, "Completed", completed_colors), use_container_width=True)
+        with c4: st.plotly_chart(create_circular_gauge(overdue, total, "Overdue", overdue_colors), use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -162,3 +175,4 @@ with tabs[3]:
     st.subheader("Export Filtered Data")
     csv = df_main.to_csv(index=False).encode("utf-8")
     st.download_button("Download current view as CSV", csv, file_name=f"{sheet_choice}_export.csv", mime="text/csv")
+
