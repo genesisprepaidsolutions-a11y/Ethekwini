@@ -1,7 +1,34 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+
+st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
+
+st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761 Dashboard</h1>", unsafe_allow_html=True)
+
+@st.cache_data
+def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
+    try:
+        xls = pd.ExcelFile(path)
+        sheets = {}
+        for s in xls.sheet_names:
+            try:
+                df = pd.read_excel(xls, sheet_name=s)
+                sheets[s] = df
+            except Exception:
+                sheets[s] = pd.DataFrame()
+        return sheets
+    except Exception:
+        return {}
+
+# ✅ LOAD DATA FIRST
+sheets = load_data()
+
 # ======================================================
 #   KPI SECTION — Gradient-style semi-circular gauges
 # ======================================================
-if 'Tasks' in sheets:
+if isinstance(sheets, dict) and 'Tasks' in sheets:
     st.subheader("Key Performance Indicators")
 
     tasks = sheets['Tasks'].copy()
@@ -64,3 +91,6 @@ if 'Tasks' in sheets:
             font={'color': '#003366', 'family': "Arial"}
         )
         cols[i].plotly_chart(fig, use_container_width=True)
+
+else:
+    st.warning("No 'Tasks' sheet found in the workbook or data could not be loaded.")
