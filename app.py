@@ -6,6 +6,7 @@ from datetime import datetime
 
 # ===================== PAGE CONFIG =====================
 st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
+
 st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761 Dashboard</h1>", unsafe_allow_html=True)
 
 # ===================== THEME TOGGLE =====================
@@ -13,7 +14,7 @@ theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
 if theme == "Dark":
     bg_color = "#0e1117"
     text_color = "white"
-    bar_colors = ["#00cc96","#ffa500","#ff4d4d"]
+    bar_colors = ["#00cc96","#ffa500","#ff4d4d"]  # green, orange, red
     pie_colors = px.colors.sequential.Viridis
 else:
     bg_color = "white"
@@ -59,7 +60,7 @@ if not df_main.empty:
             df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
         except Exception:
             pass
-    # Apply filters
+    # Filters
     if search_task:
         df_main = df_main[df_main[df_main.columns[0]].astype(str).str.contains(search_task, case=False, na=False)]
     if date_from and "Start date" in df_main.columns:
@@ -73,13 +74,8 @@ if not df_main.empty:
     if progress_filter and "Progress" in df_main.columns:
         df_main = df_main[df_main["Progress"].isin(progress_filter)]
 
-# Initialize session state for drill-down tasks
-if "selected_tasks" not in st.session_state:
-    st.session_state["selected_tasks"] = pd.DataFrame()
-
 # ===================== TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export"])
-selected_tasks = pd.DataFrame()
 
 # ===================== KPI TAB =====================
 with tabs[0]:
@@ -95,7 +91,7 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        def create_gauge(value, total, title, colors, key_name):
+        def create_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
@@ -107,41 +103,27 @@ with tabs[0]:
                                 {"range":[33,66],"color":colors[1]},
                                 {"range":[66,100],"color":colors[2]}]}
             ))
+            # Animated transition
+            fig.update_traces(delta={"reference":0, "increasing":{"color":"green"}})
             fig.add_annotation(text=f"<b>{title}</b>", x=0.5, y=1.25, showarrow=False, font=dict(size=18,color="darkblue"), xanchor="center")
             fig.add_annotation(text=f"{value} of {total} tasks", x=0.5, y=-0.25, showarrow=False, font=dict(size=14,color="darkblue"), xanchor="center")
             fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor=bg_color, font={"color":text_color})
-            if st.button(f"Show {title} tasks", key=key_name):
-                filtered = tasks.copy()
-                if title == "Not Started":
-                    filtered = filtered[filtered["Progress"].str.lower()=="not started"]
-                elif title == "In Progress":
-                    filtered = filtered[filtered["Progress"].str.lower()=="in progress"]
-                elif title == "Completed":
-                    filtered = filtered[filtered["Progress"].str.lower()=="completed"]
-                elif title == "Overdue":
-                    filtered = filtered[(filtered["Due date"]<pd.Timestamp.today()) & (~filtered["Progress"].str.lower().eq("completed"))]
-                st.session_state["selected_tasks"] = filtered
             return fig
 
         c1,c2,c3,c4 = st.columns(4)
         with c1:
-            st.plotly_chart(create_gauge(notstarted, total, "Not Started", bar_colors, "gauge_notstarted"), use_container_width=True)
+            st.plotly_chart(create_gauge(notstarted, total, "Not Started", bar_colors), use_container_width=True)
         with c2:
-            st.plotly_chart(create_gauge(inprogress, total, "In Progress", bar_colors, "gauge_inprogress"), use_container_width=True)
+            st.plotly_chart(create_gauge(inprogress, total, "In Progress", bar_colors), use_container_width=True)
         with c3:
-            st.plotly_chart(create_gauge(completed, total, "Completed", bar_colors, "gauge_completed"), use_container_width=True)
+            st.plotly_chart(create_gauge(completed, total, "Completed", bar_colors), use_container_width=True)
         with c4:
-            st.plotly_chart(create_gauge(overdue, total, "Overdue", bar_colors, "gauge_overdue"), use_container_width=True)
+            st.plotly_chart(create_gauge(overdue, total, "Overdue", bar_colors), use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-
-    # Display drill-down from KPI if exists
-    display_df = st.session_state.get("selected_tasks", df_main)
-
-    # Conditional formatting with safety checks
-    if not display_df.empty and "Due date" in display_df.columns and "Progress" in display_df.columns:
+    if "Due date" in df_main.columns and "Progress" in df_main.columns:
         def highlight_status(row):
             color = ""
             if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
@@ -151,21 +133,21 @@ with tabs[1]:
             elif row["Progress"].lower() == "completed":
                 color = "#ccffcc"
             return [color]*len(row)
-        st.dataframe(display_df.style.apply(highlight_status, axis=1))
+        st.dataframe(df_main.style.apply(highlight_status, axis=1))
     else:
-        st.dataframe(display_df)
+        st.dataframe(df_main)
 
     # Tasks per Bucket
-    if "Bucket Name" in display_df.columns:
-        agg = display_df["Bucket Name"].value_counts().reset_index()
+    if "Bucket Name" in df_main.columns:
+        agg = df_main["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name","Count"]
         fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket", color_discrete_sequence=bar_colors)
         fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
         st.plotly_chart(fig_bucket, use_container_width=True)
 
     # Priority Pie
-    if "Priority" in display_df.columns:
-        fig_pie = px.pie(display_df, names="Priority", title="Priority Distribution", color_discrete_sequence=pie_colors)
+    if "Priority" in df_main.columns:
+        fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution", color_discrete_sequence=pie_colors)
         fig_pie.update_traces(textposition="inside", textinfo="percent+label")
         fig_pie.update_layout(showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -186,5 +168,5 @@ with tabs[2]:
 # ===================== EXPORT TAB =====================
 with tabs[3]:
     st.subheader("Export Filtered Data")
-    csv = display_df.to_csv(index=False).encode("utf-8")
+    csv = df_main.to_csv(index=False).encode("utf-8")
     st.download_button("Download current view as CSV", csv, file_name=f"{sheet_choice}_export.csv", mime="text/csv")
