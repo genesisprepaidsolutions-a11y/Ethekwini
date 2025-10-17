@@ -13,13 +13,9 @@ theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
 if theme == "Dark":
     bg_color = "#0e1117"
     text_color = "white"
-    bar_colors = ["#00cc96","#ffa500","#ff4d4d"]
-    pie_colors = px.colors.sequential.Viridis
 else:
     bg_color = "white"
     text_color = "black"
-    bar_colors = ["#00cc96","#ffa500","#ff4d4d"]
-    pie_colors = px.colors.sequential.Plasma
 
 # ===================== DATA LOADING =====================
 @st.cache_data
@@ -106,7 +102,6 @@ if "Tasks" in sheets:
         fig.add_annotation(text=f"{value} of {total} tasks", x=0.5, y=-0.25, showarrow=False, font=dict(size=14,color="darkblue"), xanchor="center")
         fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor=bg_color, font={"color":text_color})
 
-        # Interactive filter
         if st.button(f"Show {title} tasks", key=key_name):
             filtered = tasks.copy()
             if title=="Not Started": filtered = filtered[filtered["Progress"].str.lower()=="not started"]
@@ -143,17 +138,20 @@ if not display_df.empty:
 else:
     st.dataframe(display_df)
 
-# Tasks per Bucket
+# ===================== BAR CHART =====================
 if "Bucket Name" in display_df.columns:
     agg = display_df["Bucket Name"].value_counts().reset_index()
     agg.columns = ["Bucket Name","Count"]
-    fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket", color_discrete_sequence=bar_colors)
+    # shades of blue
+    blue_colors = ["#c6dbef","#9ecae1","#6baed6","#3182bd","#08519c"]
+    fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket", color="Bucket Name", color_discrete_sequence=blue_colors)
     fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
     st.plotly_chart(fig_bucket, use_container_width=True)
 
-# Priority Pie
+# ===================== PIE CHART =====================
 if "Priority" in display_df.columns:
-    fig_pie = px.pie(display_df, names="Priority", title="Priority Distribution", color_discrete_sequence=pie_colors)
+    priority_colors = ["#deebf7", "#9ecae1", "#3182bd"]  # light to dark blue
+    fig_pie = px.pie(display_df, names="Priority", title="Priority Distribution", color="Priority", color_discrete_sequence=priority_colors)
     fig_pie.update_traces(textposition="inside", textinfo="percent+label")
     fig_pie.update_layout(showlegend=False)
     st.plotly_chart(fig_pie, use_container_width=True)
@@ -163,9 +161,12 @@ if "Start date" in display_df.columns and "Due date" in display_df.columns:
     timeline = display_df.dropna(subset=["Start date","Due date"]).copy()
     if not timeline.empty:
         timeline["task_short"] = timeline[display_df.columns[0]].astype(str).str.slice(0,60)
-        fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date", y="task_short", color="Progress", title="Task Timeline", color_discrete_sequence=bar_colors, hover_data=["Bucket Name","Priority"])
+        # Map progress to specific colors
+        progress_color_map = {"not started":"red","in progress":"yellow","completed":"green"}
+        timeline["color"] = timeline["Progress"].str.lower().map(progress_color_map)
+        fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date", y="task_short", color="color", title="Task Timeline", hover_data=["Bucket Name","Priority"])
         fig_tl.update_yaxes(autorange="reversed")
-        fig_tl.update_layout(paper_bgcolor=bg_color, plot_bgcolor=bg_color, font_color=text_color)
+        fig_tl.update_layout(paper_bgcolor=bg_color, plot_bgcolor=bg_color, font_color=text_color, showlegend=False)
         st.plotly_chart(fig_tl, use_container_width=True)
 else:
     st.info("Timeline data not available.")
