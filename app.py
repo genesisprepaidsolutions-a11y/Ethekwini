@@ -36,10 +36,8 @@ show_logo = st.sidebar.checkbox("Show logo (if file exists)", value=False)
 # ===================== MAIN DATAFRAME =====================
 df_main = sheets.get(sheet_choice, pd.DataFrame()).copy()
 if not df_main.empty:
-    # Convert date columns
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
-    # Apply filters
     if search_task:
         df_main = df_main[df_main[df_main.columns[0]].astype(str).str.contains(search_task, case=False, na=False)]
     if date_from and "Start date" in df_main.columns:
@@ -71,11 +69,10 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        # Trend indicators
         last_completed_count = tasks[tasks["Completed Date"].notna() & (tasks["Completed Date"] < pd.Timestamp.today())].shape[0]
         trend_completed = "▲" if completed > last_completed_count else "▼"
 
-        # Custom gauge function with fading colors
+        # ===================== GAUGE CHARTS (Brighter + 3D effect) =====================
         def create_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
@@ -84,12 +81,20 @@ with tabs[0]:
                 number={"suffix":"%", "font":{"size":40,"color":"darkblue"}, "valueformat":".1f"},
                 gauge={
                     "axis":{"range":[0,100], "tickwidth":1,"tickcolor":"darkgray"},
-                    "bar":{"color":"darkblue","thickness":0.35},
+                    "bar":{"color":"darkblue","thickness":0.4},
+                    "bgcolor":"#e0e0e0",
+                    "borderwidth":2,
+                    "bordercolor":"#444",
                     "steps":[
                         {"range":[0,33],"color":colors[0]},
                         {"range":[33,66],"color":colors[1]},
                         {"range":[66,100],"color":colors[2]}
-                    ]
+                    ],
+                    "threshold":{
+                        "line":{"color":"black","width":4},
+                        "thickness":0.75,
+                        "value":pct
+                    }
                 }
             ))
             fig.add_annotation(text=f"<b>{title}</b>", x=0.5, y=1.25, showarrow=False, font=dict(size=18,color="darkblue"), xanchor="center")
@@ -97,11 +102,11 @@ with tabs[0]:
             fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor="rgba(0,0,0,0)", font={"color":"white"})
             return fig
 
-        # Lighter gradient colors
-        not_started_colors = ["#d0f0c0", "#fef9b0", "#ffb3b3"]
-        in_progress_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
-        completed_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
-        overdue_colors = ["#fff5b0", "#ffb3b3", "#990000"]
+        # Brighter gradients
+        not_started_colors = ["#80ff80", "#ffff66", "#ff6666"]
+        in_progress_colors = ["#ff9999", "#ffff99", "#99ff99"]
+        completed_colors = ["#99ff99", "#ffff99", "#ff9999"]
+        overdue_colors = ["#ffff99", "#ff6666", "#cc0000"]
 
         c1, c2, c3, c4 = st.columns(4)
         with c1: st.plotly_chart(create_gauge(notstarted, total, "Not Started", not_started_colors), use_container_width=True)
@@ -112,7 +117,6 @@ with tabs[0]:
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-
     if "Due date" in df_main.columns and "Progress" in df_main.columns:
         def highlight_status(row):
             color = ""
@@ -148,7 +152,6 @@ with tabs[2]:
         timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
         if not timeline.empty:
             timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            # Map colors by progress
             progress_color_map = {"Not Started":"red","In Progress":"yellow","Completed":"green"}
             timeline["color_map"] = timeline["Progress"].map(progress_color_map).fillna("gray")
             fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date",
