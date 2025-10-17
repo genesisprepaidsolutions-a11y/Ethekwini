@@ -2,8 +2,8 @@ import os
 import time
 from datetime import datetime, date
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
+import plotly.express as px
 import streamlit as st
 
 # ======================================================
@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # ======================================================
-#   LIGHT THEME (PURE WHITE + BLUE ACCENTS)
+#   LIGHT THEME (WHITE + DARK BLUE ACCENTS)
 # ======================================================
 st.markdown(
     """
@@ -26,15 +26,15 @@ st.markdown(
         color: #000000 !important;
     }
     [data-testid="stSidebar"] {
-        background: #F5F8FF !important;
-        border-right: 2px solid #0073e6;
+        background: #F4F7FB !important;
+        border-right: 2px solid #003366;
     }
     [data-testid="stHeader"], [data-testid="stToolbar"] {
         background: #FFFFFF !important;
-        border-bottom: 1px solid #0073e6;
+        border-bottom: 1px solid #003366;
     }
     h1, h2, h3, h4, h5, h6, label {
-        color: #003366 !important;
+        color: #00264d !important;
         font-weight: 600;
     }
     p, span, div, td, th {
@@ -44,20 +44,19 @@ st.markdown(
         background: #FFFFFF;
         border-radius: 12px;
         padding: 20px;
-        border: 1px solid #cce0ff;
-        box-shadow: 0 2px 8px rgba(0, 115, 230, 0.1);
+        border: 1px solid #99b3e6;
+        box-shadow: 0 2px 10px rgba(0, 38, 77, 0.15);
         text-align: center;
     }
     hr {
         border: none;
         height: 2px;
-        background: #0073e6;
-        opacity: 0.3;
+        background: #003366;
+        opacity: 0.25;
     }
     .stDownloadButton > button {
-        background: #0073e6 !important;
+        background: #003366 !important;
         color: #FFFFFF !important;
-        border: none !important;
         border-radius: 8px !important;
         font-weight: bold !important;
     }
@@ -67,17 +66,15 @@ st.markdown(
 )
 
 # ======================================================
-#   Sidebar: Options and file path
+#   SIDEBAR CONFIGURATION
 # ======================================================
 st.sidebar.header("Configuration")
 enable_animations = st.sidebar.checkbox("Enable animations", value=True)
 st.sidebar.markdown("---")
 st.sidebar.header("Data source")
+
 excel_path = st.sidebar.text_input("Excel file path", value="Ethekwini WS-7761 07 Oct 2025.xlsx")
 
-# ======================================================
-#   LOAD EXCEL DATA
-# ======================================================
 @st.cache_data
 def _read_excel_all_sheets(path):
     xls = pd.ExcelFile(path)
@@ -94,14 +91,14 @@ sheets = _read_excel_all_sheets(excel_path)
 # ======================================================
 st.markdown(
     """
-    <h1 style='text-align:center; color:#003366;'>eThekwini Municipality</h1>
+    <h1 style='text-align:center; color:#00264d;'>eThekwini Municipality</h1>
     <hr>
     """,
     unsafe_allow_html=True
 )
 
 # ======================================================
-#   DATA & FILTERS
+#   FILTER SECTION
 # ======================================================
 sheet_choice = st.sidebar.selectbox(
     "Select main sheet to view",
@@ -116,7 +113,6 @@ date_from = st.sidebar.date_input("Start date from", value=today.replace(year=to
 date_to = st.sidebar.date_input("Due date to", value=today)
 
 df_main = sheets.get(sheet_choice, pd.DataFrame()).copy()
-
 if df_main.empty:
     st.warning("Selected sheet is empty.")
     st.stop()
@@ -142,7 +138,7 @@ if date_to and "Due date" in df_main.columns:
 if "Tasks" in sheets:
     st.subheader("📈 Key Performance Indicators")
     tasks = standardize_dates(sheets["Tasks"].copy())
-    
+
     total = len(tasks)
     completed = tasks["Progress"].str.lower().eq("completed").sum() if "Progress" in tasks.columns else 0
     inprogress = tasks["Progress"].str.lower().eq("in progress").sum() if "Progress" in tasks.columns else 0
@@ -153,10 +149,10 @@ if "Tasks" in sheets:
     )
 
     k1, k2, k3, k4 = st.columns(4)
-    k1.markdown(f"<div class='metric-card'><h4>Total Tasks</h4><h2 style='color:#003366;'>{total}</h2></div>", unsafe_allow_html=True)
-    k2.markdown(f"<div class='metric-card'><h4>Completed</h4><h2 style='color:#0073e6;'>{completed}</h2></div>", unsafe_allow_html=True)
-    k3.markdown(f"<div class='metric-card'><h4>In Progress</h4><h2 style='color:#4da6ff;'>{inprogress}</h2></div>", unsafe_allow_html=True)
-    k4.markdown(f"<div class='metric-card'><h4>Overdue</h4><h2 style='color:#ff4d4d;'>{overdue}</h2></div>", unsafe_allow_html=True)
+    k1.markdown(f"<div class='metric-card'><h4>Total Tasks</h4><h2 style='color:#00264d;'>{total}</h2></div>", unsafe_allow_html=True)
+    k2.markdown(f"<div class='metric-card'><h4>Completed</h4><h2 style='color:#004080;'>{completed}</h2></div>", unsafe_allow_html=True)
+    k3.markdown(f"<div class='metric-card'><h4>In Progress</h4><h2 style='color:#3366cc;'>{inprogress}</h2></div>", unsafe_allow_html=True)
+    k4.markdown(f"<div class='metric-card'><h4>Overdue</h4><h2 style='color:#cc0000;'>{overdue}</h2></div>", unsafe_allow_html=True)
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
@@ -167,68 +163,61 @@ st.subheader("📋 Data Preview")
 st.dataframe(df_main.head(200))
 
 # ======================================================
-#   TASK ANALYTICS WITH AUTO-ANIMATED DIALS
+#   TASK ANALYTICS - 3 DIALS (WITH NEEDLES)
 # ======================================================
 if "Tasks" in sheets:
     st.subheader("📊 Task Analytics")
-
     tasks = standardize_dates(sheets["Tasks"].copy())
+
     if "Progress" in tasks.columns:
-        total = len(tasks)
-        not_started = tasks["Progress"].str.lower().eq("not started").sum()
-        in_progress = tasks["Progress"].str.lower().eq("in progress").sum()
-        completed = tasks["Progress"].str.lower().eq("completed").sum()
+        prog = tasks["Progress"].fillna("").astype(str).str.lower().str.strip()
+        completed_count = prog.eq("completed").sum()
+        inprogress_count = prog.eq("in progress").sum()
+        not_started_count = prog.isin(["to do", "pending", "to-do", "pending ", "not started"]).sum()
+        total_count = len(tasks) if len(tasks) > 0 else 1
 
-        not_started_pct = round((not_started / total) * 100, 1) if total > 0 else 0
-        in_progress_pct = round((in_progress / total) * 100, 1) if total > 0 else 0
-        completed_pct = round((completed / total) * 100, 1) if total > 0 else 0
-
-        c1, c2, c3 = st.columns(3)
-
-        def make_auto_gauge(title, value, color):
+        # Define function for gauge creation
+        def make_needle_gauge(title, value, total, color):
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=value,
-                title={'text': title},
+                number={'suffix': f" / {total}", 'font': {'color': '#00264d'}},
+                title={'text': title, 'font': {'size': 18, 'color': '#00264d'}},
                 gauge={
-                    'axis': {'range': [0, 100]},
+                    'axis': {'range': [0, total], 'tickwidth': 1, 'tickcolor': '#00264d'},
                     'bar': {'color': color},
+                    'bgcolor': "white",
+                    'borderwidth': 2,
+                    'bordercolor': "#00264d",
                     'steps': [
-                        {'range': [0, 50], 'color': "#e6f0ff"},
-                        {'range': [50, 100], 'color': "#cce6ff"}
+                        {'range': [0, total * 0.5], 'color': '#b3c6ff'},
+                        {'range': [total * 0.5, total * 0.8], 'color': '#809fff'},
+                        {'range': [total * 0.8, total], 'color': '#4d79ff'}
                     ],
+                    'threshold': {
+                        'line': {'color': '#001a33', 'width': 6},
+                        'thickness': 0.8,
+                        'value': value
+                    }
                 }
             ))
-            fig.update_layout(height=300, margin=dict(t=20, b=10, l=20, r=20))
+            fig.update_layout(margin=dict(l=25, r=25, t=50, b=25), height=300)
             return fig
 
-        # simple auto animation
+        c1, c2, c3 = st.columns(3)
         if enable_animations:
-            for pct in range(0, 101, 5):
-                with c1:
-                    st.plotly_chart(make_auto_gauge("Not Started (%)", min(pct, not_started_pct), "#99c2ff"), use_container_width=True)
-                with c2:
-                    st.plotly_chart(make_auto_gauge("In Progress (%)", min(pct, in_progress_pct), "#4da6ff"), use_container_width=True)
-                with c3:
-                    st.plotly_chart(make_auto_gauge("Completed (%)", min(pct, completed_pct), "#0073e6"), use_container_width=True)
+            for pct in range(0, total_count + 1, max(1, total_count // 20)):
+                c1.plotly_chart(make_needle_gauge("Not Started", min(pct, not_started_count), total_count, "#3366cc"),
+                                use_container_width=True, key=f"not_started_{pct}")
+                c2.plotly_chart(make_needle_gauge("In Progress", min(pct, inprogress_count), total_count, "#003399"),
+                                use_container_width=True, key=f"in_progress_{pct}")
+                c3.plotly_chart(make_needle_gauge("Completed", min(pct, completed_count), total_count, "#001a66"),
+                                use_container_width=True, key=f"completed_{pct}")
                 time.sleep(0.03)
         else:
-            with c1:
-                st.plotly_chart(make_auto_gauge("Not Started (%)", not_started_pct, "#99c2ff"), use_container_width=True)
-            with c2:
-                st.plotly_chart(make_auto_gauge("In Progress (%)", in_progress_pct, "#4da6ff"), use_container_width=True)
-            with c3:
-                st.plotly_chart(make_auto_gauge("Completed (%)", completed_pct, "#0073e6"), use_container_width=True)
-
-    if "Bucket Name" in tasks.columns:
-        agg = tasks["Bucket Name"].value_counts().reset_index()
-        agg.columns = ["Bucket Name", "Count"]
-        fig2 = px.bar(agg, x="Bucket Name", y="Count", title="Tasks per Bucket", color="Bucket Name", color_discrete_sequence=px.colors.sequential.Blues)
-        st.plotly_chart(fig2, use_container_width=True)
-
-    if "Priority" in tasks.columns:
-        fig3 = px.pie(tasks, names="Priority", title="Priority Distribution", color_discrete_sequence=px.colors.sequential.Blues)
-        st.plotly_chart(fig3, use_container_width=True)
+            c1.plotly_chart(make_needle_gauge("Not Started", not_started_count, total_count, "#3366cc"), use_container_width=True)
+            c2.plotly_chart(make_needle_gauge("In Progress", inprogress_count, total_count, "#003399"), use_container_width=True)
+            c3.plotly_chart(make_needle_gauge("Completed", completed_count, total_count, "#001a66"), use_container_width=True)
 
 # ======================================================
 #   EXPORT SECTION
