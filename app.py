@@ -115,20 +115,39 @@ with tabs[0]:
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-    if "Due date" in df_main.columns and "Progress" in df_main.columns:
-        def highlight_status(row):
-            color = ""
-            if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
-                color = "#ffcccc" if theme=="Light" else "#660000"
-            elif row["Progress"].lower() == "in progress":
-                color = "#fff0b3" if theme=="Light" else "#666600"
-            elif row["Progress"].lower() == "completed":
-                color = "#ccffcc" if theme=="Light" else "#0066cc"
-            return [color]*len(row)
-        st.dataframe(df_main.style.apply(highlight_status, axis=1))
-    else:
-        st.dataframe(df_main)
 
+    # Convert dataframe to HTML with row background colors
+    def df_to_html(df):
+        html = "<table style='border-collapse: collapse; width: 100%;'>"
+        # Header
+        html += "<tr>"
+        for col in df.columns:
+            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
+        html += "</tr>"
+        # Rows
+        for _, row in df.iterrows():
+            row_color = bg_color
+            if "Progress" in df.columns and "Due date" in df.columns:
+                progress = str(row["Progress"]).lower()
+                due_date = row["Due date"]
+                if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
+                    row_color = table_colors["Overdue"]
+                elif progress == "in progress":
+                    row_color = table_colors["In Progress"]
+                elif progress == "not started":
+                    row_color = table_colors["Not Started"]
+                elif progress == "completed":
+                    row_color = table_colors["Completed"]
+            html += "<tr>"
+            for cell in row:
+                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}'>{cell}</td>"
+            html += "</tr>"
+        html += "</table>"
+        return html
+
+    st.markdown(df_to_html(df_main), unsafe_allow_html=True)
+
+    # Bucket Bar Chart
     if "Bucket Name" in df_main.columns:
         agg = df_main["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name","Count"]
@@ -138,6 +157,7 @@ with tabs[1]:
         fig_bucket.update_layout(paper_bgcolor=bg_color, font_color=text_color)
         st.plotly_chart(fig_bucket, use_container_width=True)
 
+    # Priority Pie Chart
     if "Priority" in df_main.columns:
         fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution",
                          color_discrete_sequence=px.colors.sequential.Blues)
