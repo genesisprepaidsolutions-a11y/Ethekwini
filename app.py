@@ -61,8 +61,19 @@ if not df_main.empty:
 # ===================== PROGRESS FILTER BUTTONS =====================
 if "Progress" in df_main.columns:
     st.markdown("### Filter by Progress")
+    # Horizontal toggle buttons using columns
     progress_options = ["Not Started", "In Progress", "Completed"]
-    selected_progress = st.multiselect("Select Progress Status", progress_options, default=progress_options)
+    selected_progress = []
+
+    cols = st.columns(len(progress_options))
+    for i, prog in enumerate(progress_options):
+        if cols[i].button(prog):
+            selected_progress.append(prog)
+
+    # If no button clicked, default all
+    if not selected_progress:
+        selected_progress = progress_options
+
     df_main = df_main[df_main["Progress"].isin(selected_progress)]
 
 # ===================== KPI SECTION =====================
