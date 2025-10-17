@@ -8,6 +8,17 @@ from datetime import datetime
 st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
 st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761 Dashboard</h1>", unsafe_allow_html=True)
 
+# ===================== THEME TOGGLE =====================
+theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
+if theme == "Dark":
+    bg_color = "#0e1117"
+    text_color = "white"
+    table_colors = {"Not Started": "#006400", "In Progress": "#cccc00", "Completed": "#3399ff", "Overdue": "#ff3333"}
+else:
+    bg_color = "white"
+    text_color = "black"
+    table_colors = {"Not Started": "#80ff80", "In Progress": "#ffff80", "Completed": "#80ccff", "Overdue": "#ff8080"}
+
 # ===================== DATA LOADING =====================
 @st.cache_data
 def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
@@ -73,43 +84,33 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        # ===================== SIMPLE CIRCULAR GAUGE =====================
+        # ===================== SIMPLE GAUGE WITH THEME COLORS =====================
         def create_simple_gauge(value, total, title, color):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=pct,
-                number={'suffix':'%', 'font':{'size':36}},
+                number={'suffix':'%', 'font':{'size':36, 'color': text_color}},
                 gauge={
-                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor':'darkgray'},
+                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor': text_color},
                     'bar': {'color': color, 'thickness':0.3},
                     'bgcolor': "#e6e6e6",
-                    'steps': [
-                        {'range':[0,100], 'color':'#f0f0f0'}
-                    ]
+                    'steps': [{'range':[0,100], 'color':'#f0f0f0'}]
                 },
-                title={'text': title, 'font':{'size':18}}
+                title={'text': title, 'font':{'size':18, 'color': text_color}}
             ))
             fig.update_layout(
                 height=280,
                 margin=dict(l=20,r=20,t=50,b=50),
-                paper_bgcolor="rgba(0,0,0,0)"
+                paper_bgcolor=bg_color
             )
             return fig
 
-        # Colors
-        colors_map = {
-            "Not Started": "#80ff80",
-            "In Progress": "#ffff80",
-            "Completed": "#80ccff",
-            "Overdue": "#ff8080"
-        }
-
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.plotly_chart(create_simple_gauge(notstarted, total, "Not Started", colors_map["Not Started"]), use_container_width=True)
-        with c2: st.plotly_chart(create_simple_gauge(inprogress, total, "In Progress", colors_map["In Progress"]), use_container_width=True)
-        with c3: st.plotly_chart(create_simple_gauge(completed, total, "Completed", colors_map["Completed"]), use_container_width=True)
-        with c4: st.plotly_chart(create_simple_gauge(overdue, total, "Overdue", colors_map["Overdue"]), use_container_width=True)
+        with c1: st.plotly_chart(create_simple_gauge(notstarted, total, "Not Started", table_colors["Not Started"]), use_container_width=True)
+        with c2: st.plotly_chart(create_simple_gauge(inprogress, total, "In Progress", table_colors["In Progress"]), use_container_width=True)
+        with c3: st.plotly_chart(create_simple_gauge(completed, total, "Completed", table_colors["Completed"]), use_container_width=True)
+        with c4: st.plotly_chart(create_simple_gauge(overdue, total, "Overdue", table_colors["Overdue"]), use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -118,11 +119,11 @@ with tabs[1]:
         def highlight_status(row):
             color = ""
             if pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and row["Progress"].lower() != "completed":
-                color = "background-color: #ffcccc"
+                color = "#ffcccc" if theme=="Light" else "#660000"
             elif row["Progress"].lower() == "in progress":
-                color = "background-color: #fff0b3"
+                color = "#fff0b3" if theme=="Light" else "#666600"
             elif row["Progress"].lower() == "completed":
-                color = "background-color: #ccffcc"
+                color = "#ccffcc" if theme=="Light" else "#0066cc"
             return [color]*len(row)
         st.dataframe(df_main.style.apply(highlight_status, axis=1))
     else:
@@ -134,13 +135,14 @@ with tabs[1]:
         fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count",
                             color="Bucket Name", color_discrete_sequence=px.colors.sequential.Blues)
         fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
+        fig_bucket.update_layout(paper_bgcolor=bg_color, font_color=text_color)
         st.plotly_chart(fig_bucket, use_container_width=True)
 
     if "Priority" in df_main.columns:
         fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution",
                          color_discrete_sequence=px.colors.sequential.Blues)
         fig_pie.update_traces(textposition="inside", textinfo="percent+label")
-        fig_pie.update_layout(showlegend=False)
+        fig_pie.update_layout(showlegend=False, paper_bgcolor=bg_color, font_color=text_color)
         st.plotly_chart(fig_pie, use_container_width=True)
 
 # ===================== TIMELINE TAB =====================
@@ -155,6 +157,7 @@ with tabs[2]:
                                  y="task_short", color="color_map", title="Task Timeline",
                                  color_discrete_map=progress_color_map)
             fig_tl.update_yaxes(autorange="reversed")
+            fig_tl.update_layout(paper_bgcolor=bg_color, font_color=text_color)
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
         st.info("Timeline data not available.")
