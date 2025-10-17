@@ -1,4 +1,25 @@
-streamlit
-pandas
-openpyxl
-plotly
+# Core app framework
+streamlit==1.39.0
+
+# Data handling
+pandas==2.2.3
+numpy==2.1.2
+
+# Visualization
+plotly==5.24.1
+kaleido==0.2.1   # Needed for static image export to Excel
+
+# Excel I/O
+openpyxl==3.1.5
+
+# Date/time utilities
+python-dateutil==2.9.0.post0
+
+# Optional (enhances Excel export, safe to include)
+xlsxwriter==3.2.0
+
+# Used internally by Streamlit caching and image export
+pillow==11.0.0
+
+# To ensure Streamlit image upload / logo handling works smoothly
+requests==2.32.3
