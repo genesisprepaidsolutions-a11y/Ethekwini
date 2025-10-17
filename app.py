@@ -71,7 +71,11 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        # Custom gauge function with lighter gradient colors
+        # Trend indicators
+        last_completed_count = tasks[tasks["Completed Date"].notna() & (tasks["Completed Date"] < pd.Timestamp.today())].shape[0]
+        trend_completed = "▲" if completed > last_completed_count else "▼"
+
+        # Custom gauge function with fading colors
         def create_gauge(value, total, title, colors):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
@@ -89,11 +93,11 @@ with tabs[0]:
                 }
             ))
             fig.add_annotation(text=f"<b>{title}</b>", x=0.5, y=1.25, showarrow=False, font=dict(size=18,color="darkblue"), xanchor="center")
-            fig.add_annotation(text=f"{value} of {total} tasks", x=0.5, y=-0.25, showarrow=False, font=dict(size=14,color="darkblue"), xanchor="center")
+            fig.add_annotation(text=f"{value} of {total} tasks {trend_completed if title=='Completed' else ''}", x=0.5, y=-0.25, showarrow=False, font=dict(size=14,color="darkblue"), xanchor="center")
             fig.update_layout(margin=dict(l=10,r=10,t=70,b=50), height=270, paper_bgcolor="rgba(0,0,0,0)", font={"color":"white"})
             return fig
 
-        # Lighter gradient colors for dials
+        # Lighter gradient colors
         not_started_colors = ["#d0f0c0", "#fef9b0", "#ffb3b3"]
         in_progress_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
         completed_colors = ["#ffd6d6", "#fff9b0", "#d6f0d6"]
@@ -108,7 +112,7 @@ with tabs[0]:
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-    
+
     if "Due date" in df_main.columns and "Progress" in df_main.columns:
         def highlight_status(row):
             color = ""
@@ -126,12 +130,14 @@ with tabs[1]:
     if "Bucket Name" in df_main.columns:
         agg = df_main["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name","Count"]
-        fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count", title="Tasks per Bucket")
+        fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count",
+                            color="Bucket Name", color_discrete_sequence=px.colors.sequential.Blues)
         fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
         st.plotly_chart(fig_bucket, use_container_width=True)
 
     if "Priority" in df_main.columns:
-        fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution")
+        fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution",
+                         color_discrete_sequence=px.colors.sequential.Blues)
         fig_pie.update_traces(textposition="inside", textinfo="percent+label")
         fig_pie.update_layout(showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -142,7 +148,12 @@ with tabs[2]:
         timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
         if not timeline.empty:
             timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date", y="task_short", color="Bucket Name", title="Task Timeline")
+            # Map colors by progress
+            progress_color_map = {"Not Started":"red","In Progress":"yellow","Completed":"green"}
+            timeline["color_map"] = timeline["Progress"].map(progress_color_map).fillna("gray")
+            fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date",
+                                 y="task_short", color="color_map", title="Task Timeline",
+                                 color_discrete_map=progress_color_map)
             fig_tl.update_yaxes(autorange="reversed")
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
