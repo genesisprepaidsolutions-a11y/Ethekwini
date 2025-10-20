@@ -6,13 +6,45 @@ from datetime import datetime
 import os
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="WS7761 - Smart Meter Project Status", layout="wide")
+st.set_page_config(
+    page_title="WS7761 - Smart Meter Project Status",
+    page_icon="🟧",
+    layout="wide"
+)
 
-# ===================== HEADER WITH LOGO =====================
+# ===================== HEADER WITH LOGO & ORANGE ACCENT =====================
 logo_path = "ethekwini_logo.png"
+
+st.markdown("""
+    <style>
+        /* Orange accent header bar */
+        .main > div {
+            background-color: white;
+        }
+        h1 {
+            color: #ff6600;
+            text-align: center;
+            font-weight: bold;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 2px;
+        }
+        .stTabs [data-baseweb="tab"] {
+            color: black;
+            background-color: #ffe0cc;
+            border-radius: 10px 10px 0px 0px;
+            padding: 6px 16px;
+        }
+        .stTabs [aria-selected="true"] {
+            background-color: #ff9933;
+            color: white;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 col1, col2 = st.columns([8, 1])
 with col1:
-    st.markdown("<h1 style='text-align:center'>WS7761 - Smart Meter Project Status</h1>", unsafe_allow_html=True)
+    st.markdown("<h1>WS7761 - Smart Meter Project Status</h1>", unsafe_allow_html=True)
 with col2:
     if os.path.exists(logo_path):
         st.image(logo_path, width=90)
@@ -22,11 +54,21 @@ theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
 if theme == "Dark":
     bg_color = "#0e1117"
     text_color = "white"
-    table_colors = {"Not Started": "#006400", "In Progress": "#cccc00", "Completed": "#3399ff", "Overdue": "#ff3333"}
+    table_colors = {
+        "Not Started": "#006400",
+        "In Progress": "#cccc00",
+        "Completed": "#3399ff",
+        "Overdue": "#ff3333"
+    }
 else:
     bg_color = "white"
     text_color = "black"
-    table_colors = {"Not Started": "#80ff80", "In Progress": "#ffff80", "Completed": "#80ccff", "Overdue": "#ff8080"}
+    table_colors = {
+        "Not Started": "#80ff80",
+        "In Progress": "#ffff80",
+        "Completed": "#80ccff",
+        "Overdue": "#ff8080"
+    }
 
 # ===================== DATA LOADING =====================
 @st.cache_data
@@ -98,18 +140,18 @@ with tabs[0]:
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=pct,
-                number={'suffix':'%', 'font':{'size':36, 'color': text_color}},
+                number={'suffix': '%', 'font': {'size': 36, 'color': text_color}},
                 gauge={
-                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor': text_color},
-                    'bar': {'color': color, 'thickness':0.3},
+                    'axis': {'range': [0, 100], 'tickwidth': 2, 'tickcolor': text_color},
+                    'bar': {'color': color, 'thickness': 0.3},
                     'bgcolor': "#e6e6e6",
-                    'steps': [{'range':[0,100], 'color':'#f0f0f0'}]
+                    'steps': [{'range': [0, 100], 'color': '#f0f0f0'}]
                 },
-                title={'text': title, 'font':{'size':18, 'color': text_color}}
+                title={'text': title, 'font': {'size': 18, 'color': text_color}}
             ))
             fig.update_layout(
                 height=280,
-                margin=dict(l=20,r=20,t=50,b=50),
+                margin=dict(l=20, r=20, t=50, b=50),
                 paper_bgcolor=bg_color
             )
             return fig
@@ -155,9 +197,9 @@ with tabs[1]:
 # ===================== TIMELINE TAB =====================
 with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
+        timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
-            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
             progress_color_map = {
                 "Not Started": "#66b3ff",
                 "In Progress": "#3399ff",
@@ -176,10 +218,9 @@ with tabs[2]:
                 color_discrete_map=progress_color_map
             )
 
-            # reverse order and align x-axis
             fig_tl.update_yaxes(autorange="reversed")
             fig_tl.update_xaxes(
-                dtick="M1",  # monthly ticks
+                dtick="M1",
                 tickformat="%b %Y",
                 ticklabelmode="period",
                 showgrid=True,
@@ -187,7 +228,6 @@ with tabs[2]:
                 tickangle=-30
             )
 
-            # legend label
             fig_tl.update_layout(
                 legend_title_text="Progress Status",
                 legend=dict(
