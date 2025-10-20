@@ -163,21 +163,23 @@ with tabs[2]:
                 "In Progress": "#3399ff",
                 "Completed": "#33cc33"
             }
-            timeline["color_map"] = timeline["Progress"].map(progress_color_map).fillna("#99ccff")
+            timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
+            timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
 
             fig_tl = px.timeline(
                 timeline,
                 x_start="Start date",
                 x_end="Due date",
                 y="task_short",
-                color="color_map",
+                color="color_label",
                 title="Task Timeline",
                 color_discrete_map=progress_color_map
             )
 
+            # reverse order and align x-axis
             fig_tl.update_yaxes(autorange="reversed")
             fig_tl.update_xaxes(
-                dtick="M1",  # Monthly ticks
+                dtick="M1",  # monthly ticks
                 tickformat="%b %Y",
                 ticklabelmode="period",
                 showgrid=True,
@@ -185,13 +187,22 @@ with tabs[2]:
                 tickangle=-30
             )
 
+            # legend label
             fig_tl.update_layout(
+                legend_title_text="Progress Status",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.3,
+                    xanchor="center",
+                    x=0.5
+                ),
                 paper_bgcolor=bg_color,
                 plot_bgcolor=bg_color,
                 font_color=text_color,
                 xaxis_title="Timeline (Monthly)",
                 yaxis_title="Tasks",
-                margin=dict(l=60, r=30, t=80, b=60)
+                margin=dict(l=60, r=30, t=80, b=90)
             )
 
             st.plotly_chart(fig_tl, use_container_width=True)
