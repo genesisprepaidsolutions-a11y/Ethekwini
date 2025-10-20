@@ -6,13 +6,13 @@ from datetime import datetime
 import os
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="Ethekwini WS-7761", layout="wide")
+st.set_page_config(page_title="WS7761 - Smart Meter Project Status", layout="wide")
 
 # ===================== HEADER WITH LOGO =====================
 logo_path = "ethekwini_logo.png"
 col1, col2 = st.columns([8, 1])
 with col1:
-    st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center'>WS7761 - Smart Meter Project Status</h1>", unsafe_allow_html=True)
 with col2:
     if os.path.exists(logo_path):
         st.image(logo_path, width=90)
