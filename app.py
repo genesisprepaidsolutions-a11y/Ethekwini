@@ -7,47 +7,65 @@ import os
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(
-    page_title="WS7761 - Smart Meter Project Status",
-    page_icon="🟧",
+    page_title="Ethekwini Municipality | WS7761 Smart Meter Project",
+    page_icon="ethekwini_logo.png",
     layout="wide"
 )
 
-# ===================== HEADER WITH LOGO & ORANGE ACCENT =====================
+# ===================== FIXED HEADER BAR =====================
 logo_path = "ethekwini_logo.png"
 
-st.markdown("""
+st.markdown(f"""
     <style>
-        /* Orange accent header bar */
-        .main > div {
-            background-color: white;
-        }
-        h1 {
-            color: #ff6600;
-            text-align: center;
+        /* Fixed header bar */
+        .fixed-header {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background-color: #1E2A78; /* Ethekwini blue */
+            color: white;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 1000;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+        }}
+        .fixed-header img {{
+            height: 60px;
+        }}
+        .fixed-header h1 {{
+            margin: 0;
+            font-size: 26px;
             font-weight: bold;
-        }
-        .stTabs [data-baseweb="tab-list"] {
+            color: white;
+            letter-spacing: 0.5px;
+        }}
+        .block-container {{
+            padding-top: 100px !important; /* offset for fixed header */
+        }}
+        /* Tab styling */
+        .stTabs [data-baseweb="tab-list"] {{
             gap: 2px;
-        }
-        .stTabs [data-baseweb="tab"] {
+        }}
+        .stTabs [data-baseweb="tab"] {{
             color: black;
-            background-color: #ffe0cc;
+            background-color: #e6e6ff;
             border-radius: 10px 10px 0px 0px;
             padding: 6px 16px;
-        }
-        .stTabs [aria-selected="true"] {
-            background-color: #ff9933;
+        }}
+        .stTabs [aria-selected="true"] {{
+            background-color: #1E2A78;
             color: white;
-        }
+        }}
     </style>
-""", unsafe_allow_html=True)
 
-col1, col2 = st.columns([8, 1])
-with col1:
-    st.markdown("<h1>WS7761 - Smart Meter Project Status</h1>", unsafe_allow_html=True)
-with col2:
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=90)
+    <div class="fixed-header">
+        <h1>WS7761 - Smart Meter Project Status</h1>
+        <img src="{logo_path}" alt="Ethekwini Municipality Logo">
+    </div>
+""", unsafe_allow_html=True)
 
 # ===================== THEME TOGGLE =====================
 theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
@@ -97,7 +115,6 @@ date_to = st.sidebar.date_input("Due date to", value=None)
 bucket_filter = st.sidebar.multiselect("Bucket Name", [])
 priority_filter = st.sidebar.multiselect("Priority", [])
 progress_filter = st.sidebar.multiselect("Progress", [])
-show_logo = st.sidebar.checkbox("Show logo (if file exists)", value=False)
 
 # ===================== MAIN DATAFRAME =====================
 df_main = sheets.get(sheet_choice, pd.DataFrame()).copy()
