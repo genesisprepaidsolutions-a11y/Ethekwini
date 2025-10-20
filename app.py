@@ -5,8 +5,19 @@ import plotly.express as px
 from datetime import datetime
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="Ethekwini WS-7761 Dashboard", layout="wide")
-st.markdown("<h1 style='text-align:center'>Ethekwini WS-7761 Dashboard</h1>", unsafe_allow_html=True)
+st.set_page_config(page_title="Ethekwini WS-7761", layout="wide")
+
+# ===================== LOGO & TITLE =====================
+# Centered logo and title
+st.markdown(
+    """
+    <div style="text-align: center;">
+        <img src="ethekwini_logo.png" alt="Logo" style="width:150px;">
+        <h1>Ethekwini WS-7761</h1>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # ===================== THEME TOGGLE =====================
 theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
@@ -66,8 +77,8 @@ if not df_main.empty:
     if progress_filter and "Progress" in df_main.columns:
         df_main = df_main[df_main["Progress"].isin(progress_filter)]
 
-# ===================== TABS =====================
-tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export"])
+# ===================== TABS (EXPORT REMOVED) =====================
+tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline"])
 
 # ===================== KPI TAB =====================
 with tabs[0]:
@@ -84,7 +95,6 @@ with tabs[0]:
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
         overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
-        # ===================== SIMPLE GAUGE WITH THEME COLORS =====================
         def create_simple_gauge(value, total, title, color):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
@@ -116,15 +126,12 @@ with tabs[0]:
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
 
-    # Convert dataframe to HTML with row background colors
     def df_to_html(df):
         html = "<table style='border-collapse: collapse; width: 100%;'>"
-        # Header
         html += "<tr>"
         for col in df.columns:
             html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
         html += "</tr>"
-        # Rows
         for _, row in df.iterrows():
             row_color = bg_color
             if "Progress" in df.columns and "Due date" in df.columns:
@@ -147,7 +154,6 @@ with tabs[1]:
 
     st.markdown(df_to_html(df_main), unsafe_allow_html=True)
 
-    # Bucket Bar Chart
     if "Bucket Name" in df_main.columns:
         agg = df_main["Bucket Name"].value_counts().reset_index()
         agg.columns = ["Bucket Name","Count"]
@@ -157,7 +163,6 @@ with tabs[1]:
         fig_bucket.update_layout(paper_bgcolor=bg_color, font_color=text_color)
         st.plotly_chart(fig_bucket, use_container_width=True)
 
-    # Priority Pie Chart
     if "Priority" in df_main.columns:
         fig_pie = px.pie(df_main, names="Priority", title="Priority Distribution",
                          color_discrete_sequence=px.colors.sequential.Blues)
@@ -181,9 +186,3 @@ with tabs[2]:
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
         st.info("Timeline data not available.")
-
-# ===================== EXPORT TAB =====================
-with tabs[3]:
-    st.subheader("Export Filtered Data")
-    csv = df_main.to_csv(index=False).encode("utf-8")
-    st.download_button("Download current view as CSV", csv, file_name=f"{sheet_choice}_export.csv", mime="text/csv")
