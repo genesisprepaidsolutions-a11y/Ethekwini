@@ -8,16 +8,20 @@ import os
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(
     page_title="Ethekwini Municipality | WS7761 Smart Meter Project",
-    page_icon="ethekwini_logo.png",
+    page_icon="ethekwini_logo.png",  # logo file in the same directory
     layout="wide"
 )
 
-# ===================== FIXED HEADER BAR =====================
+# ===================== FIXED HEADER BAR WITH LOGO =====================
 logo_path = "ethekwini_logo.png"
+
+# Ensure logo exists
+if not os.path.exists(logo_path):
+    st.error("⚠️ Logo file not found. Please ensure 'ethekwini_logo.png' is in the same directory as this script.")
 
 st.markdown(f"""
     <style>
-        /* Fixed header bar */
+        /* Fixed header styling */
         .fixed-header {{
             position: fixed;
             top: 0;
@@ -25,25 +29,24 @@ st.markdown(f"""
             width: 100%;
             background-color: #1E2A78; /* Ethekwini blue */
             color: white;
-            padding: 12px 24px;
+            padding: 10px 25px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            z-index: 1000;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            z-index: 9999;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.3);
         }}
         .fixed-header img {{
             height: 60px;
         }}
         .fixed-header h1 {{
             margin: 0;
-            font-size: 26px;
+            font-size: 24px;
             font-weight: bold;
             color: white;
-            letter-spacing: 0.5px;
         }}
         .block-container {{
-            padding-top: 100px !important; /* offset for fixed header */
+            padding-top: 100px !important; /* create space for fixed header */
         }}
         /* Tab styling */
         .stTabs [data-baseweb="tab-list"] {{
@@ -91,6 +94,8 @@ else:
 # ===================== DATA LOADING =====================
 @st.cache_data
 def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
+    if not os.path.exists(path):
+        return {}
     xls = pd.ExcelFile(path)
     sheets = {}
     for s in xls.sheet_names:
@@ -104,11 +109,15 @@ sheets = load_data()
 
 # ===================== SIDEBAR FILTERS =====================
 st.sidebar.header("Data & Filters")
-sheet_choice = st.sidebar.selectbox(
-    "Main sheet to view",
-    list(sheets.keys()),
-    index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0
-)
+if sheets:
+    sheet_choice = st.sidebar.selectbox(
+        "Main sheet to view",
+        list(sheets.keys()),
+        index=list(sheets.keys()).index("Tasks") if "Tasks" in sheets else 0
+    )
+else:
+    sheet_choice = None
+
 search_task = st.sidebar.text_input("Search Task name (contains)")
 date_from = st.sidebar.date_input("Start date from", value=None)
 date_to = st.sidebar.date_input("Due date to", value=None)
@@ -117,7 +126,11 @@ priority_filter = st.sidebar.multiselect("Priority", [])
 progress_filter = st.sidebar.multiselect("Progress", [])
 
 # ===================== MAIN DATAFRAME =====================
-df_main = sheets.get(sheet_choice, pd.DataFrame()).copy()
+if sheet_choice:
+    df_main = sheets.get(sheet_choice, pd.DataFrame()).copy()
+else:
+    df_main = pd.DataFrame()
+
 if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
