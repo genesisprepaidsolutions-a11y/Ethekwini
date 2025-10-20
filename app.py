@@ -22,11 +22,21 @@ theme = st.sidebar.radio("Select Theme", ["Light", "Dark"])
 if theme == "Dark":
     bg_color = "#0e1117"
     text_color = "white"
-    table_colors = {"Not Started": "#006400", "In Progress": "#cccc00", "Completed": "#3399ff", "Overdue": "#ff3333"}
+    table_colors = {
+        "Not Started": "#003366",
+        "In Progress": "#3399ff",
+        "Completed": "#00cc66",
+        "Overdue": "#ff3333"
+    }
 else:
     bg_color = "white"
     text_color = "black"
-    table_colors = {"Not Started": "#80ff80", "In Progress": "#ffff80", "Completed": "#80ccff", "Overdue": "#ff8080"}
+    table_colors = {
+        "Not Started": "#99ccff",
+        "In Progress": "#66b3ff",
+        "Completed": "#80ff80",
+        "Overdue": "#ff8080"
+    }
 
 # ===================== DATA LOADING =====================
 @st.cache_data
@@ -75,7 +85,7 @@ if not df_main.empty:
     if progress_filter and "Progress" in df_main.columns:
         df_main = df_main[df_main["Progress"].isin(progress_filter)]
 
-# ===================== TABS (EXPORT REMOVED) =====================
+# ===================== TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline"])
 
 # ===================== KPI TAB =====================
@@ -91,25 +101,26 @@ with tabs[0]:
         completed = tasks["Progress"].str.lower().eq("completed").sum() if "Progress" in tasks.columns else 0
         inprogress = tasks["Progress"].str.lower().eq("in progress").sum() if "Progress" in tasks.columns else 0
         notstarted = tasks["Progress"].str.lower().eq("not started").sum() if "Progress" in tasks.columns else 0
-        overdue = ((tasks["Due date"] < pd.Timestamp.today()) & (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
+        overdue = ((tasks["Due date"] < pd.Timestamp.today()) &
+                   (~tasks["Progress"].str.lower().eq("completed"))).sum() if "Due date" in tasks.columns and "Progress" in tasks.columns else 0
 
         def create_simple_gauge(value, total, title, color):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=pct,
-                number={'suffix':'%', 'font':{'size':36, 'color': text_color}},
+                number={'suffix': '%', 'font': {'size': 36, 'color': text_color}},
                 gauge={
-                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor': text_color},
-                    'bar': {'color': color, 'thickness':0.3},
+                    'axis': {'range': [0, 100], 'tickwidth': 2, 'tickcolor': text_color},
+                    'bar': {'color': color, 'thickness': 0.3},
                     'bgcolor': "#e6e6e6",
-                    'steps': [{'range':[0,100], 'color':'#f0f0f0'}]
+                    'steps': [{'range': [0, 100], 'color': '#f0f0f0'}]
                 },
-                title={'text': title, 'font':{'size':18, 'color': text_color}}
+                title={'text': title, 'font': {'size': 18, 'color': text_color}}
             ))
             fig.update_layout(
                 height=280,
-                margin=dict(l=20,r=20,t=50,b=50),
+                margin=dict(l=20, r=20, t=50, b=50),
                 paper_bgcolor=bg_color
             )
             return fig
@@ -154,7 +165,7 @@ with tabs[1]:
 
     if "Bucket Name" in df_main.columns:
         agg = df_main["Bucket Name"].value_counts().reset_index()
-        agg.columns = ["Bucket Name","Count"]
+        agg.columns = ["Bucket Name", "Count"]
         fig_bucket = px.bar(agg, x="Bucket Name", y="Count", text="Count",
                             color="Bucket Name", color_discrete_sequence=px.colors.sequential.Blues)
         fig_bucket.update_traces(texttemplate="%{text}", textposition="outside")
@@ -171,14 +182,44 @@ with tabs[1]:
 # ===================== TIMELINE TAB =====================
 with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
+        timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
-            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            progress_color_map = {"Not Started":"red","In Progress":"yellow","Completed":"green"}
-            timeline["color_map"] = timeline["Progress"].map(progress_color_map).fillna("gray")
-            fig_tl = px.timeline(timeline, x_start="Start date", x_end="Due date",
-                                 y="task_short", color="color_map", title="Task Timeline",
-                                 color_discrete_map=progress_color_map)
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+
+            # Unified color mapping
+            progress_color_map = {
+                "Not Started": table_colors["Not Started"],
+                "In Progress": table_colors["In Progress"],
+                "Completed": table_colors["Completed"],
+                "Overdue": table_colors["Overdue"]
+            }
+
+            def assign_color(row):
+                if "Progress" not in row or pd.isna(row["Progress"]):
+                    return "gray"
+                prog = str(row["Progress"]).title()
+                if prog == "Completed":
+                    return progress_color_map["Completed"]
+                elif prog == "In Progress":
+                    return progress_color_map["In Progress"]
+                elif prog == "Not Started":
+                    return progress_color_map["Not Started"]
+                elif pd.notna(row["Due date"]) and row["Due date"] < pd.Timestamp.today() and prog != "Completed":
+                    return progress_color_map["Overdue"]
+                else:
+                    return "gray"
+
+            timeline["color_map"] = timeline.apply(assign_color, axis=1)
+
+            fig_tl = px.timeline(
+                timeline,
+                x_start="Start date",
+                x_end="Due date",
+                y="task_short",
+                color="color_map",
+                title="Task Timeline",
+                color_discrete_map="identity"
+            )
             fig_tl.update_yaxes(autorange="reversed")
             fig_tl.update_layout(paper_bgcolor=bg_color, font_color=text_color)
             st.plotly_chart(fig_tl, use_container_width=True)
