@@ -7,9 +7,7 @@ import os
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import (
-    Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
-)
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 import plotly.io as pio
@@ -161,9 +159,7 @@ with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
         timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
-            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(
-                0, 60
-            )
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
             progress_color_map = {
                 "Not Started": "#66b3ff",
                 "In Progress": "#3399ff",
@@ -202,12 +198,16 @@ with tabs[3]:
     if not df_main.empty:
         buf = BytesIO()
 
-        # Generate KPI chart images
+        # Generate KPI chart images (safe version)
         figs = [fig_ns, fig_ip, fig_c, fig_o]
         img_list = []
         for fig in figs:
-            img_bytes = pio.to_image(fig, format="png", scale=2)
-            img_list.append(ImageReader(BytesIO(img_bytes)))
+            try:
+                img_bytes = pio.to_image(fig, format="png", scale=2)
+                img_list.append(ImageReader(BytesIO(img_bytes)))
+            except Exception as e:
+                st.warning(f"⚠️ Unable to generate KPI image: {e}")
+                img_list.append(None)
 
         # Build PDF
         doc = SimpleDocTemplate(buf, pagesize=A4)
@@ -216,12 +216,7 @@ with tabs[3]:
 
         story.append(Paragraph("<b>Ethekwini Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
-        story.append(
-            Paragraph(
-                f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}",
-                styles["Normal"],
-            )
-        )
+        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
         story.append(Spacer(1, 12))
 
         if os.path.exists(logo_path):
@@ -252,8 +247,12 @@ with tabs[3]:
 
         story.append(Paragraph("<b>KPI Visuals</b>", styles["Heading2"]))
         for img in img_list:
-            story.append(Image(img, width=400, height=250))
-            story.append(Spacer(1, 10))
+            if img:
+                story.append(Image(img, width=400, height=250))
+                story.append(Spacer(1, 10))
+            else:
+                story.append(Paragraph("Image unavailable on this environment.", styles["Normal"]))
+                story.append(Spacer(1, 10))
 
         story.append(Spacer(1, 20))
         story.append(Paragraph("<b>Task Summary (Top 15)</b>", styles["Heading2"]))
@@ -271,11 +270,7 @@ with tabs[3]:
         )
         story.append(task_table)
         story.append(Spacer(1, 20))
-        story.append(
-            Paragraph(
-                "Ethekwini Municipality | Automated Project Report", styles["Normal"]
-            )
-        )
+        story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
 
         doc.build(story)
 
