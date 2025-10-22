@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="Ethekwini WS-7761 Smart Meter Project", layout="wide")
+st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
 
 # ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
