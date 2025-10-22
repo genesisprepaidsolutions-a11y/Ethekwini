@@ -120,6 +120,43 @@ with tabs[0]:
         with c4:
             st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
 
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            df_duration = df_main.copy().replace("Null", None)
+            df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
+            df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
+            df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+            avg_duration = df_duration["Duration"].mean()
+
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
+
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
+
+            st.markdown("#### 🧭 Phase Completion Dials")
+            bucket_cols = st.columns(2)
+            for i, row in enumerate(completion_by_bucket.itertuples()):
+                with bucket_cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(row._2, 100, row._1, "#006666"),
+                        use_container_width=True,
+                    )
+
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
@@ -128,8 +165,11 @@ with tabs[1]:
         html = "<table style='border-collapse: collapse; width: 100%;'>"
         html += "<tr>"
         for col in df.columns:
-            col_wrapped = "<br>".join(col.split())
-            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+            if col in ["Completed Date", "Completed Checklist Items"]:
+                col_wrapped = "<br>".join(col.split())
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+            else:
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
         html += "</tr>"
         for _, row in df.iterrows():
             row_color = bg_color
@@ -182,3 +222,84 @@ with tabs[2]:
                 color_discrete_map=progress_color_map,
             )
             fig_tl.update_yaxes(autorange="reversed")
+            fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
+            st.plotly_chart(fig_tl, use_container_width=True)
+    else:
+        st.info("Timeline data not available.")
+
+# ===================== EXPORT REPORT TAB =====================
+with tabs[3]:
+    st.subheader("📄 Export Smart Meter Project Report")
+
+    if not df_main.empty:
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        story = []
+        styles = getSampleStyleSheet()
+
+        cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
+
+        story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
+        story.append(Spacer(1, 12))
+        story.append(Image(logo_url, width=120, height=70))
+        story.append(Spacer(1, 12))
+
+        kpi_data = [
+            ["Metric", "Count"],
+            ["Total Tasks", total],
+            ["Completed", completed],
+            ["In Progress", inprogress],
+            ["Not Started", notstarted],
+            ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A"],
+        ]
+        table = Table(kpi_data, colWidths=[200, 100])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 20))
+
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
+        data = [list(limited.columns)]
+        for _, row in limited.iterrows():
+            wrapped_row = []
+            for cell in row:
+                if str(cell).strip() == "Null":
+                    wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                else:
+                    wrapped_row.append(Paragraph(str(cell), cell_style))
+            data.append(wrapped_row)
+
+        col_count = len(limited.columns)
+        task_table = Table(data, colWidths=[(A4[1] - 80) / col_count] * col_count, repeatRows=1)
+        task_table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+
+        story.append(task_table)
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+
+        doc.build(story)
+
+        st.download_button(
+            "📥 Download PDF Report",
+            data=buf.getvalue(),
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+            mime="application/pdf",
+        )
+    else:
+        st.warning("No data found to export.")
