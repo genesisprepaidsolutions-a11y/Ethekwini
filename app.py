@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import plotly.io as pio
 from datetime import datetime
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.pdfgen import canvas
@@ -10,7 +11,6 @@ from reportlab.platypus import Table, TableStyle
 from reportlab.lib.units import inch
 from io import BytesIO
 import os
-import base64
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="WS7761 - Smart Meter Project Status", layout="wide")
@@ -124,11 +124,6 @@ with tabs[0]:
         with c3: fig_comp = create_gauge(completed, total, "Completed", table_colors["Completed"]); st.plotly_chart(fig_comp, use_container_width=True)
         with c4: fig_over = create_gauge(overdue, total, "Overdue", table_colors["Overdue"]); st.plotly_chart(fig_over, use_container_width=True)
 
-# ===================== TASK BREAKDOWN TAB =====================
-with tabs[1]:
-    st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-    st.dataframe(df_main)
-
 # ===================== TIMELINE TAB =====================
 timeline_chart = None
 with tabs[2]:
@@ -154,45 +149,50 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("📄 Export Dashboard to PDF")
 
+    def safe_export_plotly(fig, filename):
+        try:
+            img_bytes = fig.to_image(format="png", scale=2)
+            with open(filename, "wb") as f:
+                f.write(img_bytes)
+            return True
+        except Exception as e:
+            st.warning(f"⚠️ Could not render {filename} — Kaleido not available on this server.")
+            return False
+
     def generate_pdf(dataframe, filename="Ethekwini_SmartMeter_Report.pdf"):
         c = canvas.Canvas(filename, pagesize=landscape(A4))
         width, height = landscape(A4)
 
-        # === HEADER ===
+        # HEADER
         if os.path.exists(logo_path):
             c.drawImage(logo_path, 40, height - 80, width=70, preserveAspectRatio=True)
         c.setFont("Helvetica-Bold", 18)
         c.drawCentredString(width / 2, height - 50, "Ethekwini Smart Meter Project Report")
+        c.setFont("Helvetica", 10)
+        c.drawString(40, height - 100, f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}")
 
-        # === KPIs ===
+        # KPIs
         c.setFont("Helvetica-Bold", 12)
-        c.drawString(40, height - 100, f"Total Tasks: {len(dataframe)}")
-        c.drawString(220, height - 100, f"Completed: {completed}")
-        c.drawString(400, height - 100, f"In Progress: {inprogress}")
-        c.drawString(580, height - 100, f"Overdue: {overdue}")
+        c.drawString(40, height - 130, f"Total Tasks: {len(dataframe)}")
+        c.drawString(220, height - 130, f"Completed: {completed}")
+        c.drawString(400, height - 130, f"In Progress: {inprogress}")
+        c.drawString(580, height - 130, f"Overdue: {overdue}")
 
-        # === Save Plotly Figures as PNG ===
-        if 'fig_not' in locals():
-            for i, (fig, name, xpos) in enumerate([
-                (fig_not, "not_started.png", 50),
-                (fig_prog, "in_progress.png", 300),
-                (fig_comp, "completed.png", 550),
-                (fig_over, "overdue.png", 800)
-            ]):
-                img_bytes = fig.to_image(format="png", scale=2)
-                with open(name, "wb") as f:
-                    f.write(img_bytes)
+        # Add KPI charts (if Kaleido works)
+        for i, (fig, name, xpos) in enumerate([
+            (fig_not, "not_started.png", 50),
+            (fig_prog, "in_progress.png", 300),
+            (fig_comp, "completed.png", 550),
+            (fig_over, "overdue.png", 800)
+        ]):
+            if safe_export_plotly(fig, name):
                 c.drawImage(name, xpos, height - 360, width=200, height=200)
 
-        # === TIMELINE CHART ===
-        if timeline_chart:
-            timeline_path = "timeline_chart.png"
-            img_bytes = timeline_chart.to_image(format="png", scale=2)
-            with open(timeline_path, "wb") as f:
-                f.write(img_bytes)
-            c.drawImage(timeline_path, 40, height - 600, width=700, height=200)
+        # Timeline Chart
+        if timeline_chart and safe_export_plotly(timeline_chart, "timeline_chart.png"):
+            c.drawImage("timeline_chart.png", 40, height - 600, width=700, height=200)
 
-        # === DATA TABLE ===
+        # Data Table
         preview_df = dataframe.head(10)
         data = [preview_df.columns.tolist()] + preview_df.values.tolist()
         col_widths = [1.5 * inch] * len(preview_df.columns)
@@ -204,13 +204,11 @@ with tabs[3]:
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
         table.wrapOn(c, width, height)
         table.drawOn(c, 40, 60)
 
-        # === FOOTER ===
         c.setFont("Helvetica-Oblique", 8)
         c.drawRightString(width - 40, 30, "Ethekwini Municipality | Automated Project Report")
 
