@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
+st.set_page_config(page_title="Ethekwini WS-7761 Smart Meter Project", layout="wide")
 
 # ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
@@ -69,8 +69,8 @@ if not df_main.empty:
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
-    # Remove unnecessary columns including "Completed Checklist Items"
-    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late", "Completed Checklist Items"] if col in df_main.columns])
+    # Remove "Is Recurring" and "Late" columns
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
@@ -148,7 +148,7 @@ with tabs[0]:
                 .rename(columns={"Progress": "Completion %"})
             )
 
-            st.markdown("#### 🧭 Phase Completion")
+            st.markdown("#### 🧭 Phase Completion Dials")
             bucket_cols = st.columns(2)
             for i, row in enumerate(completion_by_bucket.itertuples()):
                 with bucket_cols[i % 2]:
@@ -165,8 +165,11 @@ with tabs[1]:
         html = "<table style='border-collapse: collapse; width: 100%;'>"
         html += "<tr>"
         for col in df.columns:
-            col_wrapped = "<br>".join(col.split())
-            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+            if col in ["Completed Date", "Completed Checklist Items"]:
+                col_wrapped = "<br>".join(col.split())
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+            else:
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
         html += "</tr>"
         for _, row in df.iterrows():
             row_color = bg_color
@@ -288,7 +291,7 @@ with tabs[3]:
 
         story.append(task_table)
         story.append(Spacer(1, 20))
-        story.append(Paragraph("Ethekwini Municipality | Automated Smart Meter Project Report", styles["Normal"]))
+        story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
 
         doc.build(story)
 
