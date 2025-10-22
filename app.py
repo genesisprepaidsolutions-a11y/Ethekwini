@@ -32,7 +32,7 @@ with col2:
     )
 
 with col3:
-    st.image(logo_url, width=300)
+    st.image(logo_url, width=400)
 
 st.markdown("---")
 
