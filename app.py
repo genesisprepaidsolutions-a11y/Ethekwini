@@ -12,22 +12,30 @@ from reportlab.platypus import (
 )
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import plotly.io as pio
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="WS7761 - Smart Meter Project Status", layout="wide")
+st.set_page_config(page_title="Ethekwini WS-7761 Smart Meter Project", layout="wide")
 
 # ===================== HEADER WITH LOGO =====================
 logo_path = "ethekwini_logo.png"
-col1, col2 = st.columns([8, 1])
+data_path = "Ethekwini WS-7761.xlsx"
+
+col1, col2 = st.columns([1, 7])
 with col1:
+    # Date of data (from file modified date or max created date)
+    if os.path.exists(data_path):
+        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
+    else:
+        file_date = datetime.now().strftime("%d %B %Y")
+    st.markdown(f"**📅 Data as of:** {file_date}")
+
+with col2:
     st.markdown(
-        "<h1 style='text-align:center'>WS7761 - Smart Meter Project Status</h1>",
+        "<h1 style='text-align:center'>Ethekwini WS-7761 Smart Meter Project Status</h1>",
         unsafe_allow_html=True,
     )
-with col2:
-    if os.path.exists(logo_path):
-        st.image(logo_path, width=90)
+
+st.markdown("---")
 
 # ===================== THEME SETTINGS =====================
 bg_color = "white"
@@ -41,7 +49,7 @@ table_colors = {
 
 # ===================== LOAD DATA =====================
 @st.cache_data
-def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
+def load_data(path=data_path):
     xls = pd.ExcelFile(path)
     sheets = {}
     for s in xls.sheet_names:
@@ -59,7 +67,6 @@ if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
 
-    # Replace NaT and NaN with "Null"
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
@@ -114,6 +121,45 @@ with tabs[0]:
         with c4:
             fig_o = create_simple_gauge(overdue, total, "Overdue", table_colors["Overdue"])
             st.plotly_chart(fig_o, use_container_width=True)
+
+        # ===================== ADDITIONAL INSIGHTS =====================
+        st.markdown("### 📈 Additional Insights")
+
+        # Average Task Duration
+        df_duration = df_main.copy()
+        df_duration = df_duration.replace("Null", None)
+        df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
+        df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
+        df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+        avg_duration = df_duration["Duration"].mean()
+
+        # Tasks by Priority
+        priority_counts = df_main["Priority"].value_counts()
+
+        # Completion by Bucket Name
+        completion_by_bucket = (
+            df_main.groupby("Bucket Name")["Progress"]
+            .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+            .reset_index()
+            .rename(columns={"Progress": "Completion %"})
+        )
+
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.metric("Average Task Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A")
+            st.markdown("---")
+            st.bar_chart(priority_counts)
+        with col2:
+            fig_bucket = px.bar(
+                completion_by_bucket,
+                x="Bucket Name",
+                y="Completion %",
+                title="Task Completion by Phase",
+                color="Completion %",
+                color_continuous_scale="Blues",
+            )
+            fig_bucket.update_layout(height=400, xaxis_title="", yaxis_title="Completion (%)")
+            st.plotly_chart(fig_bucket, use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -193,25 +239,11 @@ with tabs[3]:
         story = []
         styles = getSampleStyleSheet()
 
-        # Custom style for wrapping cells
-        cell_style = ParagraphStyle(
-            name="CellStyle",
-            fontSize=8,
-            leading=10,
-            alignment=1,  # center
-        )
+        cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
 
-        # Grey italic style for Null text
-        null_style = ParagraphStyle(
-            name="NullStyle",
-            fontSize=8,
-            textColor=colors.grey,
-            leading=10,
-            alignment=1,
-            fontName="Helvetica-Oblique",
-        )
-
-        story.append(Paragraph("<b>Ethekwini Smart Meter Project Report</b>", styles["Title"]))
+        story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
         story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
         story.append(Spacer(1, 12))
@@ -220,7 +252,6 @@ with tabs[3]:
             story.append(Image(logo_path, width=120, height=70))
             story.append(Spacer(1, 12))
 
-        # KPI summary
         kpi_data = [
             ["Metric", "Count"],
             ["Total Tasks", total],
@@ -228,24 +259,17 @@ with tabs[3]:
             ["In Progress", inprogress],
             ["Not Started", notstarted],
             ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A"],
         ]
         table = Table(kpi_data, colWidths=[200, 100])
-        table.setStyle(
-            TableStyle(
-                [
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-                    ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ]
-            )
-        )
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
         story.append(table)
         story.append(Spacer(1, 20))
-
-        # Task Summary
-        story.append(Paragraph("<b>Task Summary (Top 15)</b>", styles["Heading2"]))
-        story.append(Spacer(1, 10))
 
         limited = df_main.head(15).copy()
         limited = limited.fillna("Null").replace("NaT", "Null")
@@ -261,21 +285,13 @@ with tabs[3]:
             data.append(wrapped_row)
 
         col_count = len(limited.columns)
-        task_table = Table(
-            data,
-            colWidths=[(A4[1] - 80) / col_count] * col_count,
-            repeatRows=1,
-        )
-        task_table.setStyle(
-            TableStyle(
-                [
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ]
-            )
-        )
+        task_table = Table(data, colWidths=[(A4[1] - 80) / col_count] * col_count, repeatRows=1)
+        task_table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
 
         story.append(task_table)
         story.append(Spacer(1, 20))
@@ -286,7 +302,7 @@ with tabs[3]:
         st.download_button(
             "📥 Download PDF Report",
             data=buf.getvalue(),
-            file_name="Ethekwini_SmartMeter_Report.pdf",
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
             mime="application/pdf",
         )
     else:
