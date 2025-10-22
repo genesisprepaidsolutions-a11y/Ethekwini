@@ -13,6 +13,76 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
 
+# ===================== CUSTOM STYLE =====================
+st.markdown(
+    """
+    <style>
+    body {
+        background-color: #f7f9fb;
+        font-family: 'Segoe UI', sans-serif;
+        color: #003366;
+    }
+    [data-testid="stAppViewContainer"] {
+        background-color: #f7f9fb;
+        padding: 1rem 2rem;
+    }
+    [data-testid="stHeader"] {
+        background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
+        color: white;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    h1, h2, h3 {
+        color: #003366 !important;
+        font-weight: 600;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #eaf4ff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        color: #003366;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #007acc !important;
+        color: white !important;
+    }
+    div[data-testid="stMarkdownContainer"] {
+        color: #003366;
+    }
+    .metric-card {
+        background-color: #eaf4ff;
+        border-radius: 16px;
+        padding: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    th {
+        background-color: #007acc;
+        color: white !important;
+        text-align: center;
+        padding: 8px;
+    }
+    td {
+        padding: 6px;
+        text-align: center;
+    }
+    tr:nth-child(even) {background-color: #f0f6fb;}
+    tr:hover {background-color: #d6ecff;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 data_path = "Ethekwini WS-7761.xlsx"
@@ -23,7 +93,7 @@ with col1:
         file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
     else:
         file_date = datetime.now().strftime("%d %B %Y")
-    st.markdown(f"**📅 Data as of:** {file_date}")
+    st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
 
 with col2:
     st.markdown(
@@ -32,18 +102,18 @@ with col2:
     )
 
 with col3:
-    st.image(logo_url, width=250)
+    st.image(logo_url, width=220)
 
 st.markdown("---")
 
 # ===================== THEME SETTINGS =====================
-bg_color = "white"
-text_color = "black"
+bg_color = "#ffffff"
+text_color = "#003366"
 table_colors = {
-    "Not Started": "#80ff80",
-    "In Progress": "#ffff80",
-    "Completed": "#80ccff",
-    "Overdue": "#ff8080",
+    "Not Started": "#cce6ff",
+    "In Progress": "#ffeb99",
+    "Completed": "#b3ffd9",
+    "Overdue": "#ffb3b3",
 }
 
 # ===================== LOAD DATA =====================
@@ -69,7 +139,6 @@ if not df_main.empty:
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
-    # Remove "Is Recurring" and "Late" columns
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
@@ -100,7 +169,7 @@ with tabs[0]:
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                         "bar": {"color": dial_color, "thickness": 0.3},
-                        "bgcolor": "#f9f9f9",
+                        "bgcolor": "#f7f9fb",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
@@ -110,16 +179,26 @@ with tabs[0]:
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
-        with c2:
-            st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
-        with c3:
-            st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
-        with c4:
-            st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+        with st.container():
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c4:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
 
+        # Additional Insights section (kept unchanged)
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
             df_duration = df_main.copy().replace("Null", None)
@@ -162,14 +241,10 @@ with tabs[1]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
 
     def df_to_html(df):
-        html = "<table style='border-collapse: collapse; width: 100%;'>"
+        html = "<table>"
         html += "<tr>"
         for col in df.columns:
-            if col in ["Completed Date", "Completed Checklist Items"]:
-                col_wrapped = "<br>".join(col.split())
-                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
-            else:
-                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
+            html += f"<th>{col}</th>"
         html += "</tr>"
         for _, row in df.iterrows():
             row_color = bg_color
@@ -187,11 +262,10 @@ with tabs[1]:
                     row_color = table_colors["Not Started"]
                 elif progress == "completed":
                     row_color = table_colors["Completed"]
-
-            html += "<tr>"
+            html += f"<tr style='background-color:{row_color};'>"
             for cell in row:
                 cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
-                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell_display}</td>"
+                html += f"<td>{cell_display}</td>"
             html += "</tr>"
         html += "</table>"
         return html
