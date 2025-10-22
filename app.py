@@ -127,4 +127,58 @@ with tabs[1]:
     def df_to_html(df):
         html = "<table style='border-collapse: collapse; width: 100%;'>"
         html += "<tr>"
-        for col in df.column
+        for col in df.columns:
+            col_wrapped = "<br>".join(col.split())
+            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+        html += "</tr>"
+        for _, row in df.iterrows():
+            row_color = bg_color
+            if "Progress" in df.columns and "Due date" in df.columns:
+                progress = str(row["Progress"]).lower()
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
+                if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
+                    row_color = table_colors["Overdue"]
+                elif progress == "in progress":
+                    row_color = table_colors["In Progress"]
+                elif progress == "not started":
+                    row_color = table_colors["Not Started"]
+                elif progress == "completed":
+                    row_color = table_colors["Completed"]
+
+            html += "<tr>"
+            for cell in row:
+                cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell_display}</td>"
+            html += "</tr>"
+        html += "</table>"
+        return html
+
+    st.markdown(df_to_html(df_main), unsafe_allow_html=True)
+
+# ===================== TIMELINE TAB =====================
+with tabs[2]:
+    if "Start date" in df_main.columns and "Due date" in df_main.columns:
+        df_copy = df_main.replace("Null", None)
+        timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
+        if not timeline.empty:
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {
+                "Not Started": "#66b3ff",
+                "In Progress": "#3399ff",
+                "Completed": "#33cc33",
+            }
+            timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
+            timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
+            fig_tl = px.timeline(
+                timeline,
+                x_start="Start date",
+                x_end="Due date",
+                y="task_short",
+                color="color_label",
+                title="Task Timeline",
+                color_discrete_map=progress_color_map,
+            )
+            fig_tl.update_yaxes(autorange="reversed")
