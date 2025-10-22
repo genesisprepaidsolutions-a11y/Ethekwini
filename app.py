@@ -69,8 +69,8 @@ if not df_main.empty:
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
-    # Remove "Is Recurring" and "Late" columns
-    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
+    # Remove unnecessary columns including "Completed Checklist Items"
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late", "Completed Checklist Items"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
@@ -165,11 +165,8 @@ with tabs[1]:
         html = "<table style='border-collapse: collapse; width: 100%;'>"
         html += "<tr>"
         for col in df.columns:
-            if col in ["Completed Date", "Completed Checklist Items"]:
-                col_wrapped = "<br>".join(col.split())
-                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
-            else:
-                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
+            col_wrapped = "<br>".join(col.split())
+            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
         html += "</tr>"
         for _, row in df.iterrows():
             row_color = bg_color
@@ -291,7 +288,7 @@ with tabs[3]:
 
         story.append(task_table)
         story.append(Spacer(1, 20))
-        story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+        story.append(Paragraph("Ethekwini Municipality | Automated Smart Meter Project Report", styles["Normal"]))
 
         doc.build(story)
 
