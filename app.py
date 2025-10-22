@@ -1,9 +1,8 @@
-# app.py
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+import plotly.express as px
+from datetime import datetime
 import os
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape
@@ -11,408 +10,466 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Tabl
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# ------------------ PAGE CONFIG ------------------
-st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide", initial_sidebar_state="collapsed")
+# ===================== PAGE CONFIGURATION =====================
+st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
 
-# ------------------ ASSETS ------------------
-# Developer-provided images (these exist in the container)
-LOCAL_LOGO = "/mnt/data/ecfa7c96-7592-4cf8-aaf4-24b5cdbf5abb.png"
-LOCAL_HEADER_IMG = "/mnt/data/ad3a3ae7-c1ce-4e7d-bba3-06fd823ee683.png"
-DATA_PATH = "Ethekwini WS-7761.xlsx"
+# Ensure avg_duration exists for export even if KPI block doesn't set it
+avg_duration = None
 
-# ------------------ STYLE (CSS) ------------------
+# ===================== ASSETS & PATHS =====================
+logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
+data_path = "Ethekwini WS-7761.xlsx"
+
+# ===================== STYLES (LOOK ONLY) =====================
 st.markdown(
-    """
+    f"""
     <style>
-    /* Page background */
-    .stApp {
-        background-color: #f6f8fb;
-    }
+    /* Page background color */
+    .stApp {{
+        background-color: #f7f9fb;
+    }}
 
-    /* Gradient header */
-    .header {
-        background: linear-gradient(135deg, #d7e9ff 0%, #efe8ff 50%, #f3fbff 100%);
+    /* Container & header */
+    .top-header {{
+        background: linear-gradient(90deg, rgba(222,236,255,1) 0%, rgba(235,225,255,1) 100%);
         border-radius: 12px;
-        padding: 30px;
-        margin-bottom: 16px;
-    }
+        padding: 22px 26px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 24px rgba(32, 45, 75, 0.06);
+    }}
 
-    .header h1 {
+    .top-title {{
+        color: #0b4a78;
+        font-size: 30px;
+        font-weight:700;
         margin: 0;
-        color: #0b5394;
-        font-size: 34px;
-    }
+    }}
 
-    .header p {
-        margin: 4px 0 0 0;
-        color: #5b6b7a;
-    }
+    .top-sub {{
+        color:#6b7a88;
+        margin-top:6px;
+        font-size:13px;
+    }}
 
-    /* KPI card styling */
-    .kpi-card {
-        background: white;
+    /* Filter bar */
+    .filter-bar {{
+        background: transparent;
+        padding: 10px 0 24px 0;
+        margin-bottom: 6px;
+    }}
+
+    /* KPI cards */
+    .kpi-card {{
+        background: #ffffff;
+        border-radius: 12px;
         padding: 18px;
+        box-shadow: 0 6px 18px rgba(20,20,50,0.05);
+        min-height: 120px;
+    }}
+    .kpi-title {{ color:#7a8a98; font-size:13px; margin-bottom:6px; }}
+    .kpi-value {{ font-weight:700; font-size:26px; color:#052e56; }}
+    .kpi-sub {{ color:#9eaec0; font-size:12px; margin-top:6px; }}
+
+    /* Card containers */
+    .card {{
+        background: #fff;
         border-radius: 12px;
-        box-shadow: 0 6px 18px rgba(20,20,50,0.06);
-        height:120px;
-    }
+        padding: 14px;
+        box-shadow: 0 6px 18px rgba(20,20,50,0.04);
+    }}
 
-    .kpi-title { color:#6b7a8a; font-size:13px; margin-bottom:6px; }
-    .kpi-value { font-weight:700; font-size:28px; color:#0b5394;}
-    .kpi-sub { color:#9aa6b3; font-size:12px; margin-top:6px; }
+    /* Small muted text */
+    .muted {{ color:#9aa6b3; font-size:13px; }}
 
-    /* Suspicious card */
-    .susp-card {
-        background: white;
-        padding: 12px;
-        border-radius: 12px;
-        box-shadow: 0 6px 18px rgba(20,20,50,0.06);
-    }
-
-    /* table wrapper */
-    .table-card {
-        background: white;
-        padding: 12px;
-        border-radius: 12px;
-        box-shadow: 0 6px 18px rgba(20,20,50,0.06);
-    }
-
-    /* Filter row */
-    .filter-row .stSelectbox, .filter-row .stDateInput, .filter-row .stButton {
+    /* Table styling */
+    .styled-table {{
+        border-collapse: collapse;
+        font-size:13px;
+        width: 100%;
+    }}
+    .styled-table thead tr {{
+        background: #fbfdff;
+        color: #495057;
+        text-align: left;
+    }}
+    .styled-table tbody tr {{
+        border-bottom: 1px solid #f1f3f5;
+    }}
+    .styled-table tbody tr:nth-child(even) {{
+        background: #ffffff;
+    }}
+    .styled-table tbody tr:nth-child(odd) {{
+        background: #fcfeff;
+    }}
+    .badge {{
         display:inline-block;
-    }
-
-    /* Small text */
-    .muted { color:#9aa6b3; font-size:12px }
+        padding:4px 8px;
+        border-radius:999px;
+        background:#eef6ff;
+        color:#05507a;
+        font-size:12px;
+    }}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ------------------ LOAD DATA (or create demo) ------------------
-@st.cache_data(show_spinner=False)
-def load_sheets(path=DATA_PATH):
-    if os.path.exists(path):
-        try:
-            xls = pd.ExcelFile(path)
-            sheets = {s: pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names}
-            return sheets
-        except Exception as e:
-            # fallback to demo if read fails
-            return {"Tasks": pd.DataFrame()}
+# ===================== HEADER WITH LOGO (LOOK ONLY) =====================
+col1, col2, col3 = st.columns([2, 7, 1])
+with col1:
+    if os.path.exists(data_path):
+        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
     else:
-        return {"Tasks": pd.DataFrame()}
+        file_date = datetime.now().strftime("%d %B %Y")
 
-sheets = load_sheets()
-df_main = sheets.get("Tasks", pd.DataFrame()).copy()
-
-# If df_main empty, create demo dataset so UI shows something
-if df_main.empty:
-    # demo structure consistent with your earlier code
-    num = 40
-    start = datetime.today() - timedelta(days=60)
-    demo = []
-    priorities = ["High", "Medium", "Low"]
-    buckets = ["Installation", "Testing", "Commissioning", "QA"]
-    progress_states = ["Not Started", "In Progress", "Completed"]
-    for i in range(num):
-        s = start + timedelta(days=i)
-        d = s + timedelta(days=(7 + (i % 20)))
-        demo.append({
-            "Task": f"Task {i+1} - Meter work",
-            "Start date": s.date(),
-            "Due date": d.date(),
-            "Progress": progress_states[i % len(progress_states)],
-            "Priority": priorities[i % len(priorities)],
-            "Bucket Name": buckets[i % len(buckets)],
-            "Customer": f"Customer {i%6}",
-            "Location": f"Ward {1 + (i % 6)}",
-            "Consumption": int(150000 - i*1000 + (i%5)*2000),
-            "Meter": f"WM-{1000 + i}"
-        })
-    df_main = pd.DataFrame(demo)
-
-# CLEAN UP: unify date columns
-for c in [col for col in df_main.columns if "date" in col.lower()]:
-    df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
-
-df_main = df_main.fillna("Null")
-df_main = df_main.replace("NaT", "Null")
-
-# ------------------ HEADER ------------------
-logo_to_show = LOCAL_LOGO if os.path.exists(LOCAL_LOGO) else None
-with st.container():
-    st.markdown("<div class='header'>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 6, 2])
-    with col1:
-        if logo_to_show:
-            st.image(logo_to_show, width=120)
-    with col2:
-        st.markdown("<h1>Water Management Dashboard</h1>", unsafe_allow_html=True)
-        st.markdown("<p class='muted'>Operational view of meter health, consumption, and revenue.</p>", unsafe_allow_html=True)
-    with col3:
-        # small stats top right
-        st.markdown("<div style='text-align:right'><span class='muted'>Data as of</span><br><strong>" +
-                    datetime.now().strftime("%d %b %Y") + "</strong></div>", unsafe_allow_html=True)
+with col2:
+    st.markdown("<div class='top-header'>", unsafe_allow_html=True)
+    st.markdown(f"<div style='display:flex; align-items:center; gap:18px;'>", unsafe_allow_html=True)
+    # Title and subtitle centered-left
+    st.markdown(
+        f"<div><div class='top-title'>Water Management Dashboard</div><div class='top-sub'>Operational view of meter health, consumption, and revenue.</div></div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ------------------ FILTER ROW ------------------
-with st.container():
-    st.markdown("<div class='filter-row'>", unsafe_allow_html=True)
-    fcol1, fcol2, fcol3, fcol4 = st.columns([2, 2, 2, 1])
-    with fcol1:
-        daterange = st.selectbox("Date range", ["Last 7 days", "Last 30 days", "Last 90 days", "All"], index=1)
-    with fcol2:
-        region = st.selectbox("Region", ["All", "Ward 1", "Ward 2", "Ward 3", "Ward 4"], index=0)
-    with fcol3:
-        cust_type = st.selectbox("Customer Type", ["All", "Residential", "Commercial"], index=0)
-    with fcol4:
-        st.markdown("<div style='padding-top:18px'></div>", unsafe_allow_html=True)
-        apply_btn = st.button("Apply", key="apply_filters")
-    st.markdown("</div>", unsafe_allow_html=True)
+with col3:
+    # small data date on the right
+    st.markdown(f"<div style='text-align:right;'><span class='muted'>Data as of</span><br><strong>{file_date}</strong></div>", unsafe_allow_html=True)
 
-# Filter logic (simple; demo)
-df_filtered = df_main.copy()
-if daterange != "All":
-    days = 30
-    if daterange == "Last 7 days":
-        days = 7
-    elif daterange == "Last 90 days":
-        days = 90
-    cutoff = pd.Timestamp.today() - pd.Timedelta(days=days)
-    if "Due date" in df_filtered.columns:
-        df_filtered = df_filtered[
-            (pd.to_datetime(df_filtered["Due date"], errors="coerce") >= cutoff)
-            | (pd.to_datetime(df_filtered.get("Start date", pd.NaT), errors="coerce") >= cutoff)
-        ]
+st.markdown("")  # spacing
 
-if region != "All" and "Location" in df_filtered.columns:
-    df_filtered = df_filtered[df_filtered["Location"].str.contains(region.split()[-1], na=False)]
+# ===================== THEME SETTINGS (no logic change) =====================
+bg_color = "white"
+text_color = "black"
+table_colors = {
+    "Not Started": "#e8f7e9",  # soft green
+    "In Progress": "#eef6ff",  # soft blue
+    "Completed": "#f2fbf7",    # soft teal
+    "Overdue": "#fff2f2",      # soft red
+}
 
-# ------------------ KPI CARDS ------------------
-total = len(df_filtered)
-completed = df_filtered["Progress"].str.lower().eq("completed").sum()
-inprogress = df_filtered["Progress"].str.lower().eq("in progress").sum()
-notstarted = df_filtered["Progress"].str.lower().eq("not started").sum()
-overdue = (
-    (pd.to_datetime(df_filtered.get("Due date", pd.NaT), errors="coerce") < pd.Timestamp.today())
-    & (~df_filtered["Progress"].str.lower().eq("completed"))
-).sum()
+# ===================== LOAD DATA =====================
+@st.cache_data
+def load_data(path=data_path):
+    # preserve original behavior - attempt to read Excel with multiple sheets
+    if not os.path.exists(path):
+        # If file not present, return empty dict to preserve logic
+        return {}
+    xls = pd.ExcelFile(path)
+    sheets = {}
+    for s in xls.sheet_names:
+        try:
+            sheets[s] = pd.read_excel(xls, sheet_name=s)
+        except Exception:
+            sheets[s] = pd.DataFrame()
+    return sheets
 
-kpi_cols = st.columns([1.5, 1.5, 1.5, 1.5])
-kpi_info = [
-    ("Tamper Alerts", 65, "out of 1,200 meters"),
-    ("Leak Alerts", 48, "out of 1,200 meters"),
-    ("Avg Consumption (L/day)", f"{int(df_filtered['Consumption'].mean()):,}" if "Consumption" in df_filtered.columns else "N/A", "per meter"),
-    ("Avg Consumption (R/day)", "R 23.16", "per meter"),
-]
-# show KPI cards
-for col, (title, value, sub) in zip(kpi_cols, kpi_info):
-    with col:
+sheets = load_data()
+df_main = sheets.get("Tasks", pd.DataFrame()).copy() if sheets else pd.DataFrame().copy()
+
+# ===================== CLEAN DATA =====================
+if not df_main.empty:
+    for c in [col for col in df_main.columns if "date" in col.lower()]:
+        df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
+
+    df_main = df_main.fillna("Null")
+    df_main = df_main.replace("NaT", "Null")
+
+    # Remove "Is Recurring" and "Late" columns if present
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
+
+# ===================== MAIN TABS =====================
+tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
+
+# ===================== KPI TAB (layout/look only) =====================
+with tabs[0]:
+    if not df_main.empty:
+        # keep original computations
+        total = len(df_main)
+        completed = df_main["Progress"].str.lower().eq("completed").sum()
+        inprogress = df_main["Progress"].str.lower().eq("in progress").sum()
+        notstarted = df_main["Progress"].str.lower().eq("not started").sum()
+        overdue = (
+            (pd.to_datetime(df_main["Due date"], errors="coerce") < pd.Timestamp.today())
+            & (~df_main["Progress"].str.lower().eq("completed"))
+        ).sum()
+
+        # compute avg_duration used by export (preserve behavior)
+        df_duration = df_main.copy().replace("Null", None)
+        df_duration["Start date"] = pd.to_datetime(df_duration.get("Start date", pd.NaT), errors="coerce")
+        df_duration["Due date"] = pd.to_datetime(df_duration.get("Due date", pd.NaT), errors="coerce")
+        df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+        try:
+            avg_duration = df_duration["Duration"].mean()
+        except Exception:
+            avg_duration = None
+
+        # KPI cards displayed like the screenshot (rounded cards)
+        st.markdown("<div style='display:flex; gap:18px; margin-bottom:12px;'>", unsafe_allow_html=True)
+        # Card 1 - Tamper Alerts (static value preserved from previous design)
         st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
-        st.markdown(f"<div class='kpi-title'>{title}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='kpi-value'>{value}</div>", unsafe_allow_html=True)
-        st.markdown(f"<div class='kpi-sub'>{sub}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-title'>Tamper Alerts</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-value'>65</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-sub'>out of 1,200 meters</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown("---")
+        # Card 2 - Leak Alerts
+        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-title'>Leak Alerts</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-value'>48</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-sub'>out of 1,200 meters</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# ------------------ MAIN LAYOUT: Left charts, Right side cards ------------------
-left_col, right_col = st.columns([3, 1])
+        # Card 3 - Avg Consumption L/day
+        avg_cons_text = f"{int(df_main['Consumption'].mean()):,}" if ("Consumption" in df_main.columns and pd.to_numeric(df_main['Consumption'], errors='coerce').notna().any()) else "N/A"
+        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-title'>Avg Consumption (L/day)</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='kpi-value'>{avg_cons_text}</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-sub'>per meter</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-# Left content (charts + top 5)
-with left_col:
-    # Top row charts (bar for bulk inflow vs total consumption & donut for meter state)
-    chart_col1, chart_col2 = st.columns([2, 1])
-    with chart_col1:
-        # Bulk inflow vs consumption (demo)
-        values = {"Bulk Inflow": 250, "Total Consumption": 230}
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(x=list(values.keys()), y=list(values.values()), marker_color=["#80caff", "#8cd3a6"]))
-        fig_bar.update_layout(title_text="Bulk Meter Inflow vs Total Consumption", height=300, margin=dict(t=40, l=20, r=20, b=20))
-        st.plotly_chart(fig_bar, use_container_width=True)
-    with chart_col2:
-        # Meter state breakdown (donut)
-        state_counts = df_filtered["Progress"].value_counts().to_dict()
-        if not state_counts:
-            state_counts = {"Completed": 1}
-        labels = list(state_counts.keys())
-        vals = list(state_counts.values())
-        fig_donut = go.Figure(data=[go.Pie(labels=labels, values=vals, hole=0.7, sort=False)])
-        fig_donut.update_layout(title_text="Meter State Breakdown", height=300, margin=dict(t=40, l=10, r=10, b=10), showlegend=True)
-        st.plotly_chart(fig_donut, use_container_width=True)
+        # Card 4 - Avg Consumption R/day
+        st.markdown("<div class='kpi-card'>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-title'>Avg Consumption (R/day)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-value'>R 23.16</div>", unsafe_allow_html=True)
+        st.markdown("<div class='kpi-sub'>per meter</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("")  # spacing
+        st.markdown("</div>", unsafe_allow_html=True)
 
-    # Top 5 meters by consumption (bar + table)
-    st.markdown("<div class='table-card'>", unsafe_allow_html=True)
-    st.markdown("#### Top 5 Meters by Consumption")
-    if "Consumption" in df_filtered.columns:
-        top5 = df_filtered.sort_values("Consumption", ascending=False).head(5)
+        # Keep the original gauge creation function and dials (no logic change)
+        def create_colored_gauge(value, total, title, dial_color):
+            pct = (value / total * 100) if total > 0 else 0
+            fig = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=pct,
+                    number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
+                    title={"text": title, "font": {"size": 18, "color": dial_color}},
+                    gauge={
+                        "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
+                        "bar": {"color": dial_color, "thickness": 0.3},
+                        "bgcolor": "#f9f9f9",
+                        "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
+                    },
+                )
+            )
+            fig.update_layout(height=260, margin=dict(l=10, r=10, t=20, b=20), paper_bgcolor="white")
+            return fig
+
+        dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
+
+        # Place dials in a row with card look
+        dcol1, dcol2, dcol3, dcol4 = st.columns(4)
+        with dcol1:
+            st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+        with dcol2:
+            st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+        with dcol3:
+            st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+        with dcol4:
+            st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+
+        # Preserve Additional Insights section unchanged
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if (avg_duration is not None and not pd.isna(avg_duration)) else "**⏱️ Average Task Duration:** N/A")
+
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100 if "Priority" in df_main.columns else pd.Series()
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            if "Bucket Name" in df_main.columns:
+                completion_by_bucket = (
+                    df_main.groupby("Bucket Name")["Progress"]
+                    .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                    .reset_index()
+                    .rename(columns={"Progress": "Completion %"})
+                )
+
+                st.markdown("#### 🧭 Phase Completion Dials")
+                bucket_cols = st.columns(2)
+                for i, row in enumerate(completion_by_bucket.itertuples()):
+                    with bucket_cols[i % 2]:
+                        st.plotly_chart(
+                            create_colored_gauge(row._2, 100, row._1, "#006666"),
+                            use_container_width=True,
+                        )
     else:
-        top5 = df_filtered.head(5)
-    # bar
-    try:
-        fig_top5 = px.bar(top5, x="Consumption", y="Meter", orientation="h", text="Consumption", height=260)
-        fig_top5.update_layout(margin=dict(l=20, r=20, t=30, b=10))
-        fig_top5.update_yaxes(autorange="reversed")
-        st.plotly_chart(fig_top5, use_container_width=True)
-    except Exception:
-        # fallback: textual table if columns missing
-        st.table(top5.head(5))
-    # simple data table below bar
-    small_table = top5[["Meter", "Customer", "Location", "Consumption"]].fillna("Null")
-    st.write(small_table.to_html(index=False, classes="table"), unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.info("No data available to display KPIs.")
 
-    st.markdown("")  # spacing
+# ===================== TASK BREAKDOWN TAB (same data, restyled table look only) =====================
+with tabs[1]:
+    st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
 
-    # Vend vs consumption time series (demo)
-    st.markdown("<div class='table-card'>", unsafe_allow_html=True)
-    st.markdown("#### Total Vend Amount vs Total Consumption Amount (over period)")
-    # make a demo days series
-    days = pd.date_range(end=pd.Timestamp.today(), periods=14)
-    vend = [200000 + (i % 3) * 10000 - i * 2000 for i in range(len(days))]
-    cons_amount = [150000 + (i % 4) * 8000 - i * 1000 for i in range(len(days))]
-    df_series = pd.DataFrame({"date": days, "Vend Amount (R)": vend, "Consumption Amount (R)": cons_amount})
-    fig_ts = go.Figure()
-    fig_ts.add_trace(go.Scatter(x=df_series["date"], y=df_series["Vend Amount (R)"], mode="lines+markers", name="Vend Amount (R)"))
-    fig_ts.add_trace(go.Scatter(x=df_series["date"], y=df_series["Consumption Amount (R)"], mode="lines+markers", name="Consumption Amount (R)"))
-    fig_ts.update_layout(height=320, margin=dict(t=20, l=10, r=10, b=20))
-    st.plotly_chart(fig_ts, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    def df_to_html(df):
+        html = "<table class='styled-table' style='border-collapse: collapse; width: 100%;'>"
+        html += "<thead><tr>"
+        for col in df.columns:
+            # wrap long headers like original
+            header = col
+            if col in ["Completed Date", "Completed Checklist Items"]:
+                header = "<br>".join(col.split())
+            html += f"<th style='padding:10px; text-align:left'>{header}</th>"
+        html += "</tr></thead><tbody>"
+        for _, row in df.iterrows():
+            # determine row color based on Progress and Due date (keep original logic but only change appearance)
+            row_color = bg_color
+            if "Progress" in df.columns and "Due date" in df.columns:
+                progress = str(row["Progress"]).lower()
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
+                if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
+                    row_color = table_colors["Overdue"]
+                elif progress == "in progress":
+                    row_color = table_colors["In Progress"]
+                elif progress == "not started":
+                    row_color = table_colors["Not Started"]
+                elif progress == "completed":
+                    row_color = table_colors["Completed"]
 
-with right_col:
-    st.markdown("<div class='susp-card'>", unsafe_allow_html=True)
-    st.markdown("### Suspicious Meters (Top 5)")
-    # Demo suspicious scoring: combination of high consumption + not completed + tamper-like
-    df_s = df_filtered.copy()
-    # create a 'score' heuristic for demo
-    if "Consumption" in df_s.columns:
-        df_s["score"] = (pd.to_numeric(df_s["Consumption"], errors="coerce").fillna(0) / (df_s["Consumption"].max() + 1)) * 5
+            html += f"<tr style='background:{row_color}'>"
+            for cell in row:
+                cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                html += f"<td style='padding:10px; border-bottom:1px solid #f1f3f5; vertical-align:top'>{cell_display}</td>"
+            html += "</tr>"
+        html += "</tbody></table>"
+        return html
+
+    # Render the styled html table (same data as before)
+    if not df_main.empty:
+        st.markdown(df_to_html(df_main), unsafe_allow_html=True)
     else:
-        df_s["score"] = 0
-    df_s = df_s.sort_values("score", ascending=False).head(5)
-    for _, r in df_s.iterrows():
-        meter = r.get("Meter", "Unknown")
-        customer = r.get("Customer", "Unknown")
-        loc = r.get("Location", "Unknown")
-        score = float(r.get("score", 0))
-        st.markdown(f"**{meter} • {customer}**")
-        st.markdown(f"<span class='muted'>{loc}</span>  &nbsp;&nbsp; <span style='color:#d13f6f; font-weight:700'>Score {score:.1f}</span>", unsafe_allow_html=True)
-        st.markdown("---")
-    st.markdown("<div class='muted'>Suspicion score considers tamper/leak flags, zero or constant usage, and sudden spikes.</div>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.info("No task data to show.")
 
-# ------------------ TASK BREAKDOWN TAB (detailed table) ------------------
-st.markdown("---")
-st.markdown("## Full Task Overview")
-st.markdown("<div class='table-card'>", unsafe_allow_html=True)
-st.markdown(f"Showing {len(df_filtered)} rows")
-# Build an HTML table with colored rows (similar to your earlier approach)
-def df_to_html(df):
-    table_html = "<table style='border-collapse: collapse; width:100%; font-size:13px;'>"
-    # headers
-    table_html += "<thead><tr>"
-    for c in df.columns:
-        table_html += f"<th style='text-align:left; padding:8px; color:#495057; background:#fbfdff'>{c}</th>"
-    table_html += "</tr></thead><tbody>"
-    # rows
-    for _, row in df.iterrows():
-        progress = str(row.get("Progress", "")).lower()
-        row_color = "#ffffff"
-        if progress == "not started":
-            row_color = "#f0fff0"
-        elif progress == "in progress":
-            row_color = "#f8faff"
-        elif progress == "completed":
-            row_color = "#f0fbf8"
+# ===================== TIMELINE TAB (no logic change, restyled container) =====================
+with tabs[2]:
+    if "Start date" in df_main.columns and "Due date" in df_main.columns:
+        df_copy = df_main.replace("Null", None)
+        timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
+        if not timeline.empty:
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {
+                "Not Started": "#66b3ff",
+                "In Progress": "#3399ff",
+                "Completed": "#33cc33",
+            }
+            timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
+            timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
+            fig_tl = px.timeline(
+                timeline,
+                x_start="Start date",
+                x_end="Due date",
+                y="task_short",
+                color="color_label",
+                title="Task Timeline",
+                color_discrete_map=progress_color_map,
+            )
+            fig_tl.update_yaxes(autorange="reversed")
+            fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
+            fig_tl.update_layout(height=520, margin=dict(l=20, r=20, t=40, b=20), paper_bgcolor="white")
+            st.plotly_chart(fig_tl, use_container_width=True)
         else:
-            row_color = "#ffffff"
-        table_html += f"<tr style='background:{row_color}'>"
-        for c in df.columns:
-            val = row.get(c, "")
-            display = "<i style='color:gray'>Null</i>" if str(val) == "Null" or pd.isna(val) else str(val)
-            table_html += f"<td style='padding:8px; border-bottom:1px solid #f1f3f5'>{display}</td>"
-        table_html += "</tr>"
-    table_html += "</tbody></table>"
-    return table_html
-
-st.write(df_to_html(df_filtered.head(200)), unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
-
-# ------------------ TIMELINE (Gantt) ------------------
-st.markdown("---")
-st.markdown("## Project Timeline")
-if "Start date" in df_main.columns and "Due date" in df_main.columns:
-    df_tl = df_main.copy()
-    df_tl = df_tl[df_tl["Start date"].notna() & df_tl["Due date"].notna()]
-    if not df_tl.empty:
-        df_tl["task_label"] = df_tl["Task"].astype(str).str.slice(0, 50)
-        color_map = {"Not Started": "#66b3ff", "In Progress": "#3399ff", "Completed": "#33cc33"}
-        df_tl["col"] = df_tl["Progress"].map(color_map).fillna("#9aa6b3")
-        fig_tl = px.timeline(df_tl, x_start="Start date", x_end="Due date", y="task_label", color="Progress", color_discrete_map=color_map)
-        fig_tl.update_yaxes(autorange="reversed")
-        fig_tl.update_layout(height=420, margin=dict(t=30, l=10, r=10, b=20))
-        st.plotly_chart(fig_tl, use_container_width=True)
+            st.info("Timeline data not available.")
     else:
-        st.info("No timeline rows with valid Start date and Due date.")
-else:
-    st.info("Timeline data not available (Start date / Due date columns missing).")
+        st.info("Timeline data not available.")
 
-# ------------------ EXPORT REPORT TAB ------------------
-st.markdown("---")
-st.markdown("## Export Report")
-st.write("Generate a PDF snapshot of KPIs and top tasks.")
+# ===================== EXPORT REPORT TAB (same logic, look only) =====================
+with tabs[3]:
+    st.subheader("📄 Export Smart Meter Project Report")
 
-def build_pdf_bytes(df, title="Ethekwini WS-7761 Smart Meter Project Report"):
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
-    story = []
-    styles = getSampleStyleSheet()
-    story.append(Paragraph(title, styles["Title"]))
-    story.append(Spacer(1, 8))
-    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
-    story.append(Spacer(1, 12))
-    # KPIs table
-    kpi_data = [
-        ["Metric", "Count"],
-        ["Total Tasks", total],
-        ["Completed", completed],
-        ["In Progress", inprogress],
-        ["Not Started", notstarted],
-        ["Overdue", overdue],
-    ]
-    table = Table(kpi_data, colWidths=[250, 100])
-    table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER")
-    ]))
-    story.append(table)
-    story.append(Spacer(1, 12))
-    # Top 10 tasks
-    limited = df.head(15).copy().fillna("Null")
-    data = [list(limited.columns)]
-    for _, r in limited.iterrows():
-        row = []
-        for c in limited.columns:
-            val = r[c]
-            row.append(str(val))
-        data.append(row)
-    col_count = len(limited.columns)
-    task_table = Table(data, colWidths=[(A4[1] - 80) / col_count] * col_count, repeatRows=1)
-    task_table.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.3, colors.grey),
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey)
-    ]))
-    story.append(task_table)
-    doc.build(story)
-    buf.seek(0)
-    return buf.getvalue()
+    if not df_main.empty:
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        story = []
+        styles = getSampleStyleSheet()
 
-pdf_bytes = build_pdf_bytes(df_filtered)
-st.download_button("📥 Download PDF Report", data=pdf_bytes, file_name="Ethekwini_WS7761_Report.pdf", mime="application/pdf")
+        cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
 
-# ------------------ FOOTER ------------------
+        story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
+        story.append(Spacer(1, 12))
+        story.append(Image(logo_url, width=120, height=70))
+        story.append(Spacer(1, 12))
+
+        # Preserve original KPI table content & style
+        total = len(df_main)
+        completed = df_main["Progress"].str.lower().eq("completed").sum()
+        inprogress = df_main["Progress"].str.lower().eq("in progress").sum()
+        notstarted = df_main["Progress"].str.lower().eq("not started").sum()
+        overdue = (
+            (pd.to_datetime(df_main["Due date"], errors="coerce") < pd.Timestamp.today())
+            & (~df_main["Progress"].str.lower().eq("completed"))
+        ).sum()
+
+        kpi_data = [
+            ["Metric", "Count"],
+            ["Total Tasks", total],
+            ["Completed", completed],
+            ["In Progress", inprogress],
+            ["Not Started", notstarted],
+            ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if (avg_duration is not None and not pd.isna(avg_duration)) else "N/A"],
+        ]
+        table = Table(kpi_data, colWidths=[200, 100])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 20))
+
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
+        data = [list(limited.columns)]
+        for _, row in limited.iterrows():
+            wrapped_row = []
+            for cell in row:
+                if str(cell).strip() == "Null":
+                    wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                else:
+                    wrapped_row.append(Paragraph(str(cell), cell_style))
+            data.append(wrapped_row)
+
+        col_count = len(limited.columns)
+        task_table = Table(data, colWidths=[(A4[1] - 80) / col_count] * col_count, repeatRows=1)
+        task_table.setStyle(TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+
+        story.append(task_table)
+        story.append(Spacer(1, 20))
+        story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+
+        doc.build(story)
+
+        st.download_button(
+            "📥 Download PDF Report",
+            data=buf.getvalue(),
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+            mime="application/pdf",
+        )
+    else:
+        st.warning("No data found to export.")
+
+# ===================== Footer (visual only) =====================
 st.markdown("<div style='margin-top:18px; color:#98a2b3; font-size:12px'>Ethekwini Municipality | Automated Project Dashboard</div>", unsafe_allow_html=True)
