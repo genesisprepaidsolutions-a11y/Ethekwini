@@ -8,7 +8,6 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.utils import ImageReader
 from reportlab.lib import colors
-from reportlab.pdfgen import canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 
@@ -106,27 +105,31 @@ with tabs[0]:
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=pct,
-                number={'suffix':'%', 'font':{'size':36, 'color': text_color}},
+                number={'suffix': '%', 'font': {'size': 36, 'color': text_color}},
                 gauge={
-                    'axis': {'range':[0,100], 'tickwidth':2, 'tickcolor': text_color},
-                    'bar': {'color': color, 'thickness':0.3},
+                    'axis': {'range': [0, 100], 'tickwidth': 2, 'tickcolor': text_color},
+                    'bar': {'color': color, 'thickness': 0.3},
                     'bgcolor': "#e6e6e6",
-                    'steps': [{'range':[0,100], 'color':'#f0f0f0'}]
+                    'steps': [{'range': [0, 100], 'color': '#f0f0f0'}]
                 },
-                title={'text': title, 'font':{'size':18, 'color': text_color}}
+                title={'text': title, 'font': {'size': 18, 'color': text_color}}
             ))
-            fig.update_layout(
-                height=280,
-                margin=dict(l=20,r=20,t=50,b=50),
-                paper_bgcolor=bg_color
-            )
+            fig.update_layout(height=280, margin=dict(l=20, r=20, t=50, b=50), paper_bgcolor=bg_color)
             return fig
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: fig_ns = create_simple_gauge(notstarted, total, "Not Started", table_colors["Not Started"]); st.plotly_chart(fig_ns, use_container_width=True)
-        with c2: fig_ip = create_simple_gauge(inprogress, total, "In Progress", table_colors["In Progress"]); st.plotly_chart(fig_ip, use_container_width=True)
-        with c3: fig_c = create_simple_gauge(completed, total, "Completed", table_colors["Completed"]); st.plotly_chart(fig_c, use_container_width=True)
-        with c4: fig_o = create_simple_gauge(overdue, total, "Overdue", table_colors["Overdue"]); st.plotly_chart(fig_o, use_container_width=True)
+        with c1:
+            fig_ns = create_simple_gauge(notstarted, total, "Not Started", table_colors["Not Started"])
+            st.plotly_chart(fig_ns, use_container_width=True)
+        with c2:
+            fig_ip = create_simple_gauge(inprogress, total, "In Progress", table_colors["In Progress"])
+            st.plotly_chart(fig_ip, use_container_width=True)
+        with c3:
+            fig_c = create_simple_gauge(completed, total, "Completed", table_colors["Completed"])
+            st.plotly_chart(fig_c, use_container_width=True)
+        with c4:
+            fig_o = create_simple_gauge(overdue, total, "Overdue", table_colors["Overdue"])
+            st.plotly_chart(fig_o, use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -163,14 +166,10 @@ with tabs[1]:
 # ===================== TIMELINE TAB =====================
 with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date","Due date"]).copy()
+        timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
-            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0,60)
-            progress_color_map = {
-                "Not Started": "#66b3ff",
-                "In Progress": "#3399ff",
-                "Completed": "#33cc33"
-            }
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {"Not Started": "#66b3ff", "In Progress": "#3399ff", "Completed": "#33cc33"}
             timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
             timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
 
@@ -206,10 +205,10 @@ with tabs[3]:
             img_bytes = fig.to_image(format="png", width=600, height=400, scale=2)
             return ImageReader(BytesIO(img_bytes))
 
-        # Create PDF
         doc = SimpleDocTemplate(buf, pagesize=A4)
         story = []
         styles = getSampleStyleSheet()
+
         story.append(Paragraph("<b>WS7761 - Smart Meter Project Status Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
         story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
@@ -219,7 +218,7 @@ with tabs[3]:
             story.append(Image(logo_path, width=100, height=60))
             story.append(Spacer(1, 12))
 
-        # KPI table
+        # KPI Summary Table
         kpi_data = [
             ["KPI", "Count"],
             ["Not Started", notstarted],
@@ -231,13 +230,12 @@ with tabs[3]:
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
             ("GRID", (0, 0), (-1, -1), 1, colors.grey),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ]))
         story.append(table)
         story.append(Spacer(1, 20))
 
-        # Add KPI charts
+        # KPI Charts
         story.append(Paragraph("<b>KPI Visuals</b>", styles["Heading2"]))
         for fig in [fig_ns, fig_ip, fig_c, fig_o]:
             story.append(Image(save_plot_as_image(fig), width=400, height=250))
