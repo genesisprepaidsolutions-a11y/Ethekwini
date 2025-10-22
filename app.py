@@ -87,17 +87,9 @@ with tabs[0]:
             & (~df_main["Progress"].str.lower().eq("completed"))
         ).sum()
 
-        # Function for Dial #2 Style (Solid gauge, distinct colors)
+        # Function for colored gauges
         def create_colored_gauge(value, total, title, dial_color):
             pct = (value / total * 100) if total > 0 else 0
-
-            if pct <= 50:
-                gradient_color = "red"
-            elif pct <= 80:
-                gradient_color = "yellow"
-            else:
-                gradient_color = "green"
-
             fig = go.Figure(
                 go.Indicator(
                     mode="gauge+number",
@@ -106,7 +98,7 @@ with tabs[0]:
                     title={"text": title, "font": {"size": 20, "color": dial_color}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                        "bar": {"color": gradient_color, "thickness": 0.3},
+                        "bar": {"color": dial_color, "thickness": 0.3},
                         "bgcolor": "#f9f9f9",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
@@ -132,7 +124,7 @@ with tabs[0]:
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
 
-            # --- Average Task Duration ---
+            # --- Average Task Duration (Text Only) ---
             df_duration = df_main.copy()
             df_duration = df_duration.replace("Null", None)
             df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
@@ -140,21 +132,10 @@ with tabs[0]:
             df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
             avg_duration = df_duration["Duration"].mean()
 
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
+
             # --- Priority Distribution ---
             priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
-
-            # --- Phase Completion ---
-            completion_by_bucket = (
-                df_main.groupby("Bucket Name")["Progress"]
-                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
-                .reset_index()
-                .rename(columns={"Progress": "Completion %"})
-            )
-
-            # --- Layout: 2 dials per row ---
-            st.markdown("#### ⏱️ Average Task Duration")
-            st.plotly_chart(create_colored_gauge(avg_duration if avg_duration else 0, 100, "Avg Duration (days)", "#336699"), use_container_width=True)
-
             st.markdown("#### 🔰 Priority Distribution")
             cols = st.columns(2)
             priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
@@ -164,6 +145,14 @@ with tabs[0]:
                         create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
                         use_container_width=True,
                     )
+
+            # --- Phase Completion ---
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
 
             st.markdown("#### 🧭 Phase Completion Dials")
             bucket_cols = st.columns(2)
