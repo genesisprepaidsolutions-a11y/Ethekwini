@@ -7,8 +7,10 @@ from datetime import datetime
 from reportlab.lib.pagesizes import landscape, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
-from reportlab.platypus import Table, TableStyle
+from reportlab.platypus import Table, TableStyle, Paragraph
 from reportlab.lib.units import inch
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_CENTER
 import os
 
 # ===================== PAGE CONFIGURATION =====================
@@ -123,40 +125,9 @@ with tabs[0]:
         with c3: fig_comp = create_gauge(completed, total, "Completed", table_colors["Completed"]); st.plotly_chart(fig_comp, use_container_width=True)
         with c4: fig_over = create_gauge(overdue, total, "Overdue", table_colors["Overdue"]); st.plotly_chart(fig_over, use_container_width=True)
 
-# ===================== TIMELINE TAB =====================
-timeline_chart = None
-with tabs[2]:
-    st.subheader("Project Timeline")
-    if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
-        if not timeline.empty:
-            timeline["Task"] = timeline[df_main.columns[0]].astype(str)
-            timeline_chart = px.timeline(
-                timeline,
-                x_start="Start date",
-                x_end="Due date",
-                y="Task",
-                color="Progress",
-                title="Task Timeline"
-            )
-            timeline_chart.update_yaxes(autorange="reversed")
-            st.plotly_chart(timeline_chart, use_container_width=True)
-    else:
-        st.info("Timeline data not available.")
-
 # ===================== EXPORT TAB =====================
 with tabs[3]:
     st.subheader("📄 Export Dashboard to PDF")
-
-    def safe_export_plotly(fig, filename):
-        try:
-            img_bytes = fig.to_image(format="png", scale=2)
-            with open(filename, "wb") as f:
-                f.write(img_bytes)
-            return True
-        except Exception:
-            st.warning("⚠️ Could not export chart (Kaleido not available).")
-            return False
 
     def generate_pdf(dataframe, filename="Ethekwini_SmartMeter_Report.pdf"):
         c = canvas.Canvas(filename, pagesize=landscape(A4))
@@ -181,25 +152,40 @@ with tabs[3]:
         if "Bucket Name" in dataframe.columns:
             dataframe = dataframe.drop(columns=["Bucket Name"])
 
-        # Limit rows for readability
         preview_df = dataframe.head(12).fillna("")
 
-        # Auto-adjust column widths
-        col_count = len(preview_df.columns)
-        col_widths = [width / col_count - 30] * col_count
+        # Use paragraph style for wrapped text
+        style = ParagraphStyle(
+            name="TableCell",
+            fontName="Helvetica",
+            fontSize=8,
+            leading=10,
+            alignment=TA_CENTER,
+        )
 
-        data = [preview_df.columns.tolist()] + preview_df.values.tolist()
+        # Wrap text in Paragraph for each cell
+        data = []
+        data.append([Paragraph(str(col), style) for col in preview_df.columns])
+        for _, row in preview_df.iterrows():
+            data.append([Paragraph(str(x), style) for x in row])
+
+        # Adjust column widths based on total page width
+        total_width = width - 80
+        base_width = total_width / len(preview_df.columns)
+        col_widths = [base_width for _ in preview_df.columns]
+
         table = Table(data, colWidths=col_widths)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("FONTSIZE", (0, 1), (-1, -1), 8),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, colors.lightgrey]),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
         ]))
 
         # Draw table neatly centered
