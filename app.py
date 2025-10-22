@@ -19,7 +19,6 @@ data_path = "Ethekwini WS-7761.xlsx"
 
 col1, col2, col3 = st.columns([2, 6, 1])
 with col1:
-    # Data timestamp
     if os.path.exists(data_path):
         file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
     else:
@@ -70,6 +69,9 @@ if not df_main.empty:
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
+    # Remove "Is Recurring" and "Late" columns
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
+
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
 
@@ -87,7 +89,6 @@ with tabs[0]:
             & (~df_main["Progress"].str.lower().eq("completed"))
         ).sum()
 
-        # Function for colored gauges
         def create_colored_gauge(value, total, title, dial_color):
             pct = (value / total * 100) if total > 0 else 0
             fig = go.Figure(
@@ -107,7 +108,6 @@ with tabs[0]:
             fig.update_layout(height=270, margin=dict(l=15, r=15, t=40, b=20))
             return fig
 
-        # Distinct dial colors
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         c1, c2, c3, c4 = st.columns(4)
@@ -120,13 +120,9 @@ with tabs[0]:
         with c4:
             st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
 
-        # ===================== ADDITIONAL INSIGHTS =====================
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
-
-            # --- Average Task Duration (Text Only) ---
-            df_duration = df_main.copy()
-            df_duration = df_duration.replace("Null", None)
+            df_duration = df_main.copy().replace("Null", None)
             df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
             df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
             df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
@@ -134,7 +130,6 @@ with tabs[0]:
 
             st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
 
-            # --- Priority Distribution ---
             priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
             st.markdown("#### 🔰 Priority Distribution")
             cols = st.columns(2)
@@ -146,7 +141,6 @@ with tabs[0]:
                         use_container_width=True,
                     )
 
-            # --- Phase Completion ---
             completion_by_bucket = (
                 df_main.groupby("Bucket Name")["Progress"]
                 .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
@@ -171,7 +165,11 @@ with tabs[1]:
         html = "<table style='border-collapse: collapse; width: 100%;'>"
         html += "<tr>"
         for col in df.columns:
-            html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
+            if col in ["Completed Date", "Completed Checklist Items"]:
+                col_wrapped = "<br>".join(col.split())
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col_wrapped}</th>"
+            else:
+                html += f"<th style='border:1px solid gray; padding:4px; background-color:{bg_color}; color:{text_color}'>{col}</th>"
         html += "</tr>"
         for _, row in df.iterrows():
             row_color = bg_color
@@ -192,9 +190,7 @@ with tabs[1]:
 
             html += "<tr>"
             for cell in row:
-                cell_display = (
-                    f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
-                )
+                cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
                 html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell_display}</td>"
             html += "</tr>"
         html += "</table>"
