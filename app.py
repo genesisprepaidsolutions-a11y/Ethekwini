@@ -3,11 +3,14 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import landscape, A4
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
+from reportlab.lib.units import inch
+from io import BytesIO
 import os
+import base64
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="WS7761 - Smart Meter Project Status", layout="wide")
@@ -83,8 +86,9 @@ tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export"])
 
 # ===================== KPI TAB =====================
 with tabs[0]:
+    st.subheader("Key Performance Indicators")
+
     if "Tasks" in sheets:
-        st.subheader("Key Performance Indicators")
         tasks = sheets["Tasks"].copy()
         for col in ["Start date", "Due date", "Completed Date"]:
             if col in tasks.columns:
@@ -115,24 +119,25 @@ with tabs[0]:
             return fig
 
         c1, c2, c3, c4 = st.columns(4)
-        with c1: st.plotly_chart(create_gauge(notstarted, total, "Not Started", table_colors["Not Started"]), use_container_width=True)
-        with c2: st.plotly_chart(create_gauge(inprogress, total, "In Progress", table_colors["In Progress"]), use_container_width=True)
-        with c3: st.plotly_chart(create_gauge(completed, total, "Completed", table_colors["Completed"]), use_container_width=True)
-        with c4: st.plotly_chart(create_gauge(overdue, total, "Overdue", table_colors["Overdue"]), use_container_width=True)
+        with c1: fig_not = create_gauge(notstarted, total, "Not Started", table_colors["Not Started"]); st.plotly_chart(fig_not, use_container_width=True)
+        with c2: fig_prog = create_gauge(inprogress, total, "In Progress", table_colors["In Progress"]); st.plotly_chart(fig_prog, use_container_width=True)
+        with c3: fig_comp = create_gauge(completed, total, "Completed", table_colors["Completed"]); st.plotly_chart(fig_comp, use_container_width=True)
+        with c4: fig_over = create_gauge(overdue, total, "Overdue", table_colors["Overdue"]); st.plotly_chart(fig_over, use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Sheet: {sheet_choice} — Preview ({df_main.shape[0]} rows)")
-
     st.dataframe(df_main)
 
 # ===================== TIMELINE TAB =====================
+timeline_chart = None
 with tabs[2]:
+    st.subheader("Project Timeline")
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
         timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
             timeline["Task"] = timeline[df_main.columns[0]].astype(str)
-            fig_tl = px.timeline(
+            timeline_chart = px.timeline(
                 timeline,
                 x_start="Start date",
                 x_end="Due date",
@@ -140,8 +145,8 @@ with tabs[2]:
                 color="Progress",
                 title="Task Timeline"
             )
-            fig_tl.update_yaxes(autorange="reversed")
-            st.plotly_chart(fig_tl, use_container_width=True)
+            timeline_chart.update_yaxes(autorange="reversed")
+            st.plotly_chart(timeline_chart, use_container_width=True)
     else:
         st.info("Timeline data not available.")
 
@@ -149,38 +154,65 @@ with tabs[2]:
 with tabs[3]:
     st.subheader("📄 Export Dashboard to PDF")
 
-    def generate_pdf(dataframe, filename="Project_Report.pdf"):
-        c = canvas.Canvas(filename, pagesize=A4)
-        width, height = A4
+    def generate_pdf(dataframe, filename="Ethekwini_SmartMeter_Report.pdf"):
+        c = canvas.Canvas(filename, pagesize=landscape(A4))
+        width, height = landscape(A4)
 
-        c.setFont("Helvetica-Bold", 16)
-        c.drawString(200, 800, "Ethekwini Smart Meter Project Report")
-
+        # === HEADER ===
         if os.path.exists(logo_path):
-            c.drawImage(logo_path, 40, 760, width=60, preserveAspectRatio=True)
+            c.drawImage(logo_path, 40, height - 80, width=70, preserveAspectRatio=True)
+        c.setFont("Helvetica-Bold", 18)
+        c.drawCentredString(width / 2, height - 50, "Ethekwini Smart Meter Project Report")
 
-        c.setFont("Helvetica", 10)
-        c.drawString(40, 740, f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}")
+        # === KPIs ===
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(40, height - 100, f"Total Tasks: {len(dataframe)}")
+        c.drawString(220, height - 100, f"Completed: {completed}")
+        c.drawString(400, height - 100, f"In Progress: {inprogress}")
+        c.drawString(580, height - 100, f"Overdue: {overdue}")
 
-        # KPIs summary
-        c.drawString(40, 710, f"Total Tasks: {len(dataframe)}")
-        c.drawString(200, 710, f"Completed: {completed}")
-        c.drawString(350, 710, f"In Progress: {inprogress}")
-        c.drawString(480, 710, f"Overdue: {overdue}")
+        # === Save Plotly Figures as PNG ===
+        if 'fig_not' in locals():
+            for i, (fig, name, xpos) in enumerate([
+                (fig_not, "not_started.png", 50),
+                (fig_prog, "in_progress.png", 300),
+                (fig_comp, "completed.png", 550),
+                (fig_over, "overdue.png", 800)
+            ]):
+                img_bytes = fig.to_image(format="png", scale=2)
+                with open(name, "wb") as f:
+                    f.write(img_bytes)
+                c.drawImage(name, xpos, height - 360, width=200, height=200)
 
-        # Create table preview
-        preview_df = dataframe.head(15)
+        # === TIMELINE CHART ===
+        if timeline_chart:
+            timeline_path = "timeline_chart.png"
+            img_bytes = timeline_chart.to_image(format="png", scale=2)
+            with open(timeline_path, "wb") as f:
+                f.write(img_bytes)
+            c.drawImage(timeline_path, 40, height - 600, width=700, height=200)
+
+        # === DATA TABLE ===
+        preview_df = dataframe.head(10)
         data = [preview_df.columns.tolist()] + preview_df.values.tolist()
-        table = Table(data, repeatRows=1)
+        col_widths = [1.5 * inch] * len(preview_df.columns)
+        table = Table(data, colWidths=col_widths)
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-            ('GRID', (0, 0), (-1, -1), 0.25, colors.grey),
-            ('FONT', (0, 0), (-1, -1), 'Helvetica', 8),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT')
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
         ]))
         table.wrapOn(c, width, height)
-        table.drawOn(c, 40, 500)
+        table.drawOn(c, 40, 60)
+
+        # === FOOTER ===
+        c.setFont("Helvetica-Oblique", 8)
+        c.drawRightString(width - 40, 30, "Ethekwini Municipality | Automated Project Report")
 
         c.showPage()
         c.save()
