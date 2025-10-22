@@ -9,6 +9,8 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+import tempfile
+import plotly.io as pio  # For exporting figures
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
@@ -111,14 +113,19 @@ with tabs[0]:
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         c1, c2, c3, c4 = st.columns(4)
+        fig_notstarted = create_colored_gauge(notstarted, total, "Not Started", dial_colors[0])
+        fig_inprogress = create_colored_gauge(inprogress, total, "In Progress", dial_colors[1])
+        fig_completed = create_colored_gauge(completed, total, "Completed", dial_colors[2])
+        fig_overdue = create_colored_gauge(overdue, total, "Overdue", dial_colors[3])
+
         with c1:
-            st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+            st.plotly_chart(fig_notstarted, use_container_width=True)
         with c2:
-            st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+            st.plotly_chart(fig_inprogress, use_container_width=True)
         with c3:
-            st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+            st.plotly_chart(fig_completed, use_container_width=True)
         with c4:
-            st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+            st.plotly_chart(fig_overdue, use_container_width=True)
 
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
@@ -134,12 +141,12 @@ with tabs[0]:
             st.markdown("#### 🔰 Priority Distribution")
             cols = st.columns(2)
             priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            fig_priority = []
             for i, (priority, pct) in enumerate(priority_counts.items()):
                 with cols[i % 2]:
-                    st.plotly_chart(
-                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
-                        use_container_width=True,
-                    )
+                    fig = create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)])
+                    st.plotly_chart(fig, use_container_width=True)
+                    fig_priority.append(fig)
 
             completion_by_bucket = (
                 df_main.groupby("Bucket Name")["Progress"]
@@ -150,12 +157,12 @@ with tabs[0]:
 
             st.markdown("#### 🧭 Phase Completion")
             bucket_cols = st.columns(2)
+            fig_bucket = []
             for i, row in enumerate(completion_by_bucket.itertuples()):
                 with bucket_cols[i % 2]:
-                    st.plotly_chart(
-                        create_colored_gauge(row._2, 100, row._1, "#006666"),
-                        use_container_width=True,
-                    )
+                    fig = create_colored_gauge(row._2, 100, row._1, "#006666")
+                    st.plotly_chart(fig, use_container_width=True)
+                    fig_bucket.append(fig)
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -197,6 +204,7 @@ with tabs[1]:
 
 # ===================== TIMELINE TAB =====================
 with tabs[2]:
+    fig_tl = None
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
         df_copy = df_main.replace("Null", None)
         timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
@@ -225,6 +233,13 @@ with tabs[2]:
         st.info("Timeline data not available.")
 
 # ===================== EXPORT REPORT TAB =====================
+def fig_to_png_bytes(fig):
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+        fig.write_image(tmpfile.name, format="png", scale=2)  # requires kaleido
+        tmpfile.seek(0)
+        img_data = tmpfile.read()
+    return img_data
+
 with tabs[3]:
     st.subheader("📄 Export Smart Meter Project Report")
 
@@ -245,6 +260,33 @@ with tabs[3]:
         story.append(Image(logo_url, width=120, height=70))
         story.append(Spacer(1, 12))
 
+        # -------------------- KPI FIGURES --------------------
+        story.append(Paragraph("Key Performance Indicators", styles["Heading2"]))
+        for fig in [fig_notstarted, fig_inprogress, fig_completed, fig_overdue]:
+            img_bytes = fig_to_png_bytes(fig)
+            story.append(Image(BytesIO(img_bytes), width=250, height=200))
+            story.append(Spacer(1, 12))
+
+        story.append(Paragraph("Priority Distribution", styles["Heading2"]))
+        for fig in fig_priority:
+            img_bytes = fig_to_png_bytes(fig)
+            story.append(Image(BytesIO(img_bytes), width=250, height=200))
+            story.append(Spacer(1, 12))
+
+        story.append(Paragraph("Phase Completion", styles["Heading2"]))
+        for fig in fig_bucket:
+            img_bytes = fig_to_png_bytes(fig)
+            story.append(Image(BytesIO(img_bytes), width=250, height=200))
+            story.append(Spacer(1, 12))
+
+        # -------------------- TIMELINE FIGURE --------------------
+        if fig_tl:
+            story.append(Paragraph("Task Timeline", styles["Heading2"]))
+            img_bytes = fig_to_png_bytes(fig_tl)
+            story.append(Image(BytesIO(img_bytes), width=500, height=300))
+            story.append(Spacer(1, 12))
+
+        # -------------------- KPI TABLE --------------------
         kpi_data = [
             ["Metric", "Count"],
             ["Total Tasks", total],
@@ -264,6 +306,7 @@ with tabs[3]:
         story.append(table)
         story.append(Spacer(1, 20))
 
+        # -------------------- TASK TABLE --------------------
         limited = df_main.head(15).copy()
         limited = limited.fillna("Null").replace("NaT", "Null")
 
