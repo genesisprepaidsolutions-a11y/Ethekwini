@@ -9,7 +9,6 @@ from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.platypus import Table, TableStyle
 from reportlab.lib.units import inch
-from io import BytesIO
 import os
 
 # ===================== PAGE CONFIGURATION =====================
@@ -155,8 +154,8 @@ with tabs[3]:
             with open(filename, "wb") as f:
                 f.write(img_bytes)
             return True
-        except Exception as e:
-            st.warning(f"⚠️ Could not render {filename} — Kaleido not available on this server.")
+        except Exception:
+            st.warning("⚠️ Could not export chart (Kaleido not available).")
             return False
 
     def generate_pdf(dataframe, filename="Ethekwini_SmartMeter_Report.pdf"):
@@ -171,31 +170,25 @@ with tabs[3]:
         c.setFont("Helvetica", 10)
         c.drawString(40, height - 100, f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}")
 
-        # KPIs
+        # KPIs Summary
         c.setFont("Helvetica-Bold", 12)
         c.drawString(40, height - 130, f"Total Tasks: {len(dataframe)}")
         c.drawString(220, height - 130, f"Completed: {completed}")
         c.drawString(400, height - 130, f"In Progress: {inprogress}")
         c.drawString(580, height - 130, f"Overdue: {overdue}")
 
-        # Add KPI charts (if Kaleido works)
-        for i, (fig, name, xpos) in enumerate([
-            (fig_not, "not_started.png", 50),
-            (fig_prog, "in_progress.png", 300),
-            (fig_comp, "completed.png", 550),
-            (fig_over, "overdue.png", 800)
-        ]):
-            if safe_export_plotly(fig, name):
-                c.drawImage(name, xpos, height - 360, width=200, height=200)
+        # Prepare clean data (remove Bucket Name)
+        if "Bucket Name" in dataframe.columns:
+            dataframe = dataframe.drop(columns=["Bucket Name"])
 
-        # Timeline Chart
-        if timeline_chart and safe_export_plotly(timeline_chart, "timeline_chart.png"):
-            c.drawImage("timeline_chart.png", 40, height - 600, width=700, height=200)
+        # Limit rows for readability
+        preview_df = dataframe.head(12).fillna("")
 
-        # Data Table
-        preview_df = dataframe.head(10)
+        # Auto-adjust column widths
+        col_count = len(preview_df.columns)
+        col_widths = [width / col_count - 30] * col_count
+
         data = [preview_df.columns.tolist()] + preview_df.values.tolist()
-        col_widths = [1.5 * inch] * len(preview_df.columns)
         table = Table(data, colWidths=col_widths)
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
@@ -205,10 +198,15 @@ with tabs[3]:
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
             ("FONTSIZE", (0, 0), (-1, -1), 8),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
         ]))
+
+        # Draw table neatly centered
         table.wrapOn(c, width, height)
         table.drawOn(c, 40, 60)
 
+        # FOOTER
         c.setFont("Helvetica-Oblique", 8)
         c.drawRightString(width - 40, 30, "Ethekwini Municipality | Automated Project Report")
 
