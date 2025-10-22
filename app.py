@@ -27,7 +27,7 @@ with col1:
 
 with col2:
     st.markdown(
-        "<h1 style='text-align:center; color:#003366;'>Ethekwini WS-7761 Smart Meter Project Status</h1>",
+        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project </h1>",
         unsafe_allow_html=True,
     )
 
