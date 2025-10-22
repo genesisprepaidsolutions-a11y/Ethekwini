@@ -54,9 +54,14 @@ def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
 sheets = load_data()
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
 
+# ===================== CLEAN DATA =====================
 if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
+
+    # Replace NaT and NaN with "Null"
+    df_main = df_main.fillna("Null")
+    df_main = df_main.replace("NaT", "Null")
 
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
@@ -71,7 +76,7 @@ with tabs[0]:
         inprogress = df_main["Progress"].str.lower().eq("in progress").sum()
         notstarted = df_main["Progress"].str.lower().eq("not started").sum()
         overdue = (
-            (df_main["Due date"] < pd.Timestamp.today())
+            (pd.to_datetime(df_main["Due date"], errors="coerce") < pd.Timestamp.today())
             & (~df_main["Progress"].str.lower().eq("completed"))
         ).sum()
 
@@ -124,7 +129,10 @@ with tabs[1]:
             row_color = bg_color
             if "Progress" in df.columns and "Due date" in df.columns:
                 progress = str(row["Progress"]).lower()
-                due_date = row["Due date"]
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
                 if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
                     row_color = table_colors["Overdue"]
                 elif progress == "in progress":
@@ -133,9 +141,13 @@ with tabs[1]:
                     row_color = table_colors["Not Started"]
                 elif progress == "completed":
                     row_color = table_colors["Completed"]
+
             html += "<tr>"
             for cell in row:
-                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell}</td>"
+                cell_display = (
+                    f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                )
+                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell_display}</td>"
             html += "</tr>"
         html += "</table>"
         return html
@@ -145,7 +157,8 @@ with tabs[1]:
 # ===================== TIMELINE TAB =====================
 with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        timeline = df_main.dropna(subset=["Start date", "Due date"]).copy()
+        df_copy = df_main.replace("Null", None)
+        timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
             timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
             progress_color_map = {
@@ -165,9 +178,7 @@ with tabs[2]:
                 color_discrete_map=progress_color_map,
             )
             fig_tl.update_yaxes(autorange="reversed")
-            fig_tl.update_xaxes(
-                dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30
-            )
+            fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
         st.info("Timeline data not available.")
@@ -182,12 +193,22 @@ with tabs[3]:
         story = []
         styles = getSampleStyleSheet()
 
-        # custom style for wrapping cells
+        # Custom style for wrapping cells
         cell_style = ParagraphStyle(
             name="CellStyle",
             fontSize=8,
             leading=10,
             alignment=1,  # center
+        )
+
+        # Grey italic style for Null text
+        null_style = ParagraphStyle(
+            name="NullStyle",
+            fontSize=8,
+            textColor=colors.grey,
+            leading=10,
+            alignment=1,
+            fontName="Helvetica-Oblique",
         )
 
         story.append(Paragraph("<b>Ethekwini Smart Meter Project Report</b>", styles["Title"]))
@@ -225,12 +246,18 @@ with tabs[3]:
         # Task Summary
         story.append(Paragraph("<b>Task Summary (Top 15)</b>", styles["Heading2"]))
         story.append(Spacer(1, 10))
-        limited = df_main.head(15).fillna("")
-        data = [list(limited.columns)]
 
-        # wrap every cell content in Paragraph for text wrapping
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
+        data = [list(limited.columns)]
         for _, row in limited.iterrows():
-            wrapped_row = [Paragraph(str(cell), cell_style) for cell in row]
+            wrapped_row = []
+            for cell in row:
+                if str(cell).strip() == "Null":
+                    wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                else:
+                    wrapped_row.append(Paragraph(str(cell), cell_style))
             data.append(wrapped_row)
 
         col_count = len(limited.columns)
@@ -249,6 +276,7 @@ with tabs[3]:
                 ]
             )
         )
+
         story.append(task_table)
         story.append(Spacer(1, 20))
         story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
