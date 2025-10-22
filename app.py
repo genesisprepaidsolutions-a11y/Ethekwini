@@ -7,9 +7,11 @@ import os
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
+from reportlab.platypus import (
+    Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
+)
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import plotly.io as pio
 
 # ===================== PAGE CONFIGURATION =====================
@@ -28,7 +30,6 @@ with col2:
         st.image(logo_path, width=90)
 
 # ===================== THEME SETTINGS =====================
-theme = "Light"
 bg_color = "white"
 text_color = "black"
 table_colors = {
@@ -53,7 +54,6 @@ def load_data(path="Ethekwini WS-7761 07 Oct 2025.xlsx"):
 sheets = load_data()
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
 
-# convert date columns
 if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
@@ -98,24 +98,16 @@ with tabs[0]:
 
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            fig_ns = create_simple_gauge(
-                notstarted, total, "Not Started", table_colors["Not Started"]
-            )
+            fig_ns = create_simple_gauge(notstarted, total, "Not Started", table_colors["Not Started"])
             st.plotly_chart(fig_ns, use_container_width=True)
         with c2:
-            fig_ip = create_simple_gauge(
-                inprogress, total, "In Progress", table_colors["In Progress"]
-            )
+            fig_ip = create_simple_gauge(inprogress, total, "In Progress", table_colors["In Progress"])
             st.plotly_chart(fig_ip, use_container_width=True)
         with c3:
-            fig_c = create_simple_gauge(
-                completed, total, "Completed", table_colors["Completed"]
-            )
+            fig_c = create_simple_gauge(completed, total, "Completed", table_colors["Completed"])
             st.plotly_chart(fig_c, use_container_width=True)
         with c4:
-            fig_o = create_simple_gauge(
-                overdue, total, "Overdue", table_colors["Overdue"]
-            )
+            fig_o = create_simple_gauge(overdue, total, "Overdue", table_colors["Overdue"])
             st.plotly_chart(fig_o, use_container_width=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
@@ -133,11 +125,7 @@ with tabs[1]:
             if "Progress" in df.columns and "Due date" in df.columns:
                 progress = str(row["Progress"]).lower()
                 due_date = row["Due date"]
-                if (
-                    pd.notna(due_date)
-                    and due_date < pd.Timestamp.today()
-                    and progress != "completed"
-                ):
+                if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
                     row_color = table_colors["Overdue"]
                 elif progress == "in progress":
                     row_color = table_colors["In Progress"]
@@ -166,10 +154,7 @@ with tabs[2]:
                 "Completed": "#33cc33",
             }
             timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
-            timeline["color_label"] = timeline["Progress"].map(
-                lambda x: x if x in progress_color_map else "Other"
-            )
-
+            timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
             fig_tl = px.timeline(
                 timeline,
                 x_start="Start date",
@@ -181,11 +166,7 @@ with tabs[2]:
             )
             fig_tl.update_yaxes(autorange="reversed")
             fig_tl.update_xaxes(
-                dtick="M1",
-                tickformat="%b %Y",
-                showgrid=True,
-                gridcolor="lightgray",
-                tickangle=-30,
+                dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30
             )
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
@@ -197,11 +178,17 @@ with tabs[3]:
 
     if not df_main.empty:
         buf = BytesIO()
-
-        # Generate PDF in Landscape layout
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         story = []
         styles = getSampleStyleSheet()
+
+        # custom style for wrapping cells
+        cell_style = ParagraphStyle(
+            name="CellStyle",
+            fontSize=8,
+            leading=10,
+            alignment=1,  # center
+        )
 
         story.append(Paragraph("<b>Ethekwini Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
@@ -239,11 +226,17 @@ with tabs[3]:
         story.append(Paragraph("<b>Task Summary (Top 15)</b>", styles["Heading2"]))
         story.append(Spacer(1, 10))
         limited = df_main.head(15).fillna("")
-        data = [list(limited.columns)] + limited.values.tolist()
+        data = [list(limited.columns)]
+
+        # wrap every cell content in Paragraph for text wrapping
+        for _, row in limited.iterrows():
+            wrapped_row = [Paragraph(str(cell), cell_style) for cell in row]
+            data.append(wrapped_row)
+
         col_count = len(limited.columns)
         task_table = Table(
             data,
-            colWidths=[(A4[1] - 80) / col_count] * col_count,  # evenly spaced columns
+            colWidths=[(A4[1] - 80) / col_count] * col_count,
             repeatRows=1,
         )
         task_table.setStyle(
@@ -253,7 +246,6 @@ with tabs[3]:
                     ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
                     ("ALIGN", (0, 0), (-1, -1), "CENTER"),
                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                    ("WORDWRAP", (0, 0), (-1, -1), True),
                 ]
             )
         )
