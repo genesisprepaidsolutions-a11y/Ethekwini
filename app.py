@@ -9,8 +9,7 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-import tempfile
-import plotly.io as pio  # For exporting figures
+import plotly.io as pio  # For Kaleido export
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
@@ -71,7 +70,6 @@ if not df_main.empty:
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
 
-    # Remove unnecessary columns including "Completed Checklist Items"
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late", "Completed Checklist Items"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
@@ -118,14 +116,10 @@ with tabs[0]:
         fig_completed = create_colored_gauge(completed, total, "Completed", dial_colors[2])
         fig_overdue = create_colored_gauge(overdue, total, "Overdue", dial_colors[3])
 
-        with c1:
-            st.plotly_chart(fig_notstarted, use_container_width=True)
-        with c2:
-            st.plotly_chart(fig_inprogress, use_container_width=True)
-        with c3:
-            st.plotly_chart(fig_completed, use_container_width=True)
-        with c4:
-            st.plotly_chart(fig_overdue, use_container_width=True)
+        with c1: st.plotly_chart(fig_notstarted, use_container_width=True)
+        with c2: st.plotly_chart(fig_inprogress, use_container_width=True)
+        with c3: st.plotly_chart(fig_completed, use_container_width=True)
+        with c4: st.plotly_chart(fig_overdue, use_container_width=True)
 
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
@@ -234,11 +228,14 @@ with tabs[2]:
 
 # ===================== EXPORT REPORT TAB =====================
 def fig_to_png_bytes(fig):
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        fig.write_image(tmpfile.name, format="png", scale=2)  # requires kaleido
-        tmpfile.seek(0)
-        img_data = tmpfile.read()
-    return img_data
+    """
+    Converts a Plotly figure to PNG bytes using Kaleido.
+    Fully server-compatible, no Chromium required.
+    """
+    buf = BytesIO()
+    pio.write_image(fig, buf, format='png', engine='kaleido', scale=2)
+    buf.seek(0)
+    return buf.getvalue()
 
 with tabs[3]:
     st.subheader("📄 Export Smart Meter Project Report")
@@ -279,11 +276,11 @@ with tabs[3]:
             story.append(Image(BytesIO(img_bytes), width=250, height=200))
             story.append(Spacer(1, 12))
 
-        # -------------------- TIMELINE FIGURE --------------------
+        # -------------------- TIMELINE --------------------
         if fig_tl:
             story.append(Paragraph("Task Timeline", styles["Heading2"]))
             img_bytes = fig_to_png_bytes(fig_tl)
-            story.append(Image(BytesIO(img_bytes), width=500, height=300))
+            story.append(Image(BytesIO(img_bytes), width=700, height=300))
             story.append(Spacer(1, 12))
 
         # -------------------- KPI TABLE --------------------
