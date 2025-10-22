@@ -11,7 +11,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="Ethekwini WS-7761 Smart Meter Project", layout="wide")
+st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
 
 # ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
@@ -148,7 +148,7 @@ with tabs[0]:
                 .rename(columns={"Progress": "Completion %"})
             )
 
-            st.markdown("#### 🧭 Phase Completion Dials")
+            st.markdown("#### 🧭 Phase Completion")
             bucket_cols = st.columns(2)
             for i, row in enumerate(completion_by_bucket.itertuples()):
                 with bucket_cols[i % 2]:
