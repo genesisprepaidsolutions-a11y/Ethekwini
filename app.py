@@ -5,7 +5,7 @@ import plotly.express as px
 from datetime import datetime
 import os
 from io import BytesIO
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.utils import ImageReader
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib import colors
@@ -28,7 +28,7 @@ with col2:
         st.image(logo_path, width=90)
 
 # ===================== THEME SETTINGS =====================
-theme = "Light"  # fixed
+theme = "Light"
 bg_color = "white"
 text_color = "black"
 table_colors = {
@@ -147,7 +147,7 @@ with tabs[1]:
                     row_color = table_colors["Completed"]
             html += "<tr>"
             for cell in row:
-                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}'>{cell}</td>"
+                html += f"<td style='border:1px solid gray; padding:4px; background-color:{row_color}; color:{text_color}; word-wrap:break-word;'>{cell}</td>"
             html += "</tr>"
         html += "</table>"
         return html
@@ -198,19 +198,8 @@ with tabs[3]:
     if not df_main.empty:
         buf = BytesIO()
 
-        # Generate KPI chart images (safe version)
-        figs = [fig_ns, fig_ip, fig_c, fig_o]
-        img_list = []
-        for fig in figs:
-            try:
-                img_bytes = pio.to_image(fig, format="png", scale=2)
-                img_list.append(ImageReader(BytesIO(img_bytes)))
-            except Exception as e:
-                st.warning(f"⚠️ Unable to generate KPI image: {e}")
-                img_list.append(None)
-
-        # Build PDF
-        doc = SimpleDocTemplate(buf, pagesize=A4)
+        # Generate PDF in Landscape layout
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         story = []
         styles = getSampleStyleSheet()
 
@@ -220,7 +209,7 @@ with tabs[3]:
         story.append(Spacer(1, 12))
 
         if os.path.exists(logo_path):
-            story.append(Image(logo_path, width=100, height=60))
+            story.append(Image(logo_path, width=120, height=70))
             story.append(Spacer(1, 12))
 
         # KPI summary
@@ -232,39 +221,39 @@ with tabs[3]:
             ["Not Started", notstarted],
             ["Overdue", overdue],
         ]
-        table = Table(kpi_data, colWidths=[150, 100])
+        table = Table(kpi_data, colWidths=[200, 100])
         table.setStyle(
             TableStyle(
                 [
                     ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
                     ("GRID", (0, 0), (-1, -1), 1, colors.grey),
                     ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ]
             )
         )
         story.append(table)
         story.append(Spacer(1, 20))
 
-        story.append(Paragraph("<b>KPI Visuals</b>", styles["Heading2"]))
-        for img in img_list:
-            if img:
-                story.append(Image(img, width=400, height=250))
-                story.append(Spacer(1, 10))
-            else:
-                story.append(Paragraph("Image unavailable on this environment.", styles["Normal"]))
-                story.append(Spacer(1, 10))
-
-        story.append(Spacer(1, 20))
+        # Task Summary
         story.append(Paragraph("<b>Task Summary (Top 15)</b>", styles["Heading2"]))
         story.append(Spacer(1, 10))
         limited = df_main.head(15).fillna("")
         data = [list(limited.columns)] + limited.values.tolist()
-        task_table = Table(data, colWidths=[80] * min(6, len(limited.columns)))
+        col_count = len(limited.columns)
+        task_table = Table(
+            data,
+            colWidths=[(A4[1] - 80) / col_count] * col_count,  # evenly spaced columns
+            repeatRows=1,
+        )
         task_table.setStyle(
             TableStyle(
                 [
                     ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                     ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                    ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("WORDWRAP", (0, 0), (-1, -1), True),
                 ]
             )
         )
