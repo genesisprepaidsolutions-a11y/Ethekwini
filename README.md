@@ -24,4 +24,4 @@ streamlit run app.py
 2. On [streamlit.io/cloud](https://streamlit.io/cloud), connect your GitHub repo and deploy.
 3. Make sure the Excel file (`Ethekwini WS-7761 07 Oct 2025.xlsx`) is included in the repository root or change `load_data` path in `app.py`.
 
----
+--
