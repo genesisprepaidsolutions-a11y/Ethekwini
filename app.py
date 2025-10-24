@@ -17,30 +17,18 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===================== ABSOLUTE LIGHT THEME OVERRIDE =====================
+# ===================== FORCE WHITE THEME =====================
+# Remove dark mode or device theme support
 st.markdown(
     """
     <style>
-    /* Force Light Mode Globally — Override Browser & OS Preferences */
-    :root {
-        color-scheme: light !important;
-        --background-color: #ffffff !important;
-        --text-color: #003366 !important;
-        --primary-color: #007acc !important;
-    }
-
-    @media (prefers-color-scheme: dark) {
-        html, body {
-            background-color: #ffffff !important;
-            color: #003366 !important;
-        }
-    }
-
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stVerticalBlock"] {
+    /* Disable Streamlit theme detection */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
         background-color: #ffffff !important;
         color: #003366 !important;
     }
 
+    /* General body */
     body {
         font-family: 'Segoe UI', sans-serif;
         background-color: #ffffff !important;
@@ -55,13 +43,16 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
 
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f7faff !important;
+    /* Main container */
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        padding: 1rem 2rem;
     }
 
     /* Tabs */
-    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
     .stTabs [data-baseweb="tab"] {
         background-color: #eaf4ff;
         border-radius: 10px;
@@ -74,15 +65,20 @@ st.markdown(
         color: white !important;
     }
 
-    /* Headers & Markdown */
-    h1, h2, h3, div[data-testid="stMarkdownContainer"] {
+    /* Headers */
+    h1, h2, h3 {
         color: #003366 !important;
         font-weight: 600;
     }
 
-    /* Metric Cards */
+    /* Markdown text */
+    div[data-testid="stMarkdownContainer"] {
+        color: #003366 !important;
+    }
+
+    /* Metric cards */
     .metric-card {
-        background-color: #f5f9ff !important;
+        background-color: #f5f9ff;
         border-radius: 16px;
         padding: 1rem;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
@@ -111,15 +107,8 @@ st.markdown(
     tr:nth-child(even) {background-color: #f0f6fb;}
     tr:hover {background-color: #d6ecff;}
 
-    /* Buttons, inputs, and dropdowns */
-    button, input, textarea, select {
-        background-color: #ffffff !important;
-        color: #003366 !important;
-        border-color: #007acc !important;
-    }
-
-    /* Remove dark mode toggle and Streamlit toolbar */
-    [data-testid="stToolbar"], [data-testid="stThemeToggle"], button[data-testid="baseButton-secondary"] {
+    /* Remove dark mode toggles entirely */
+    [data-testid="stToolbar"], button[data-testid="baseButton-secondary"], [data-testid="stThemeToggle"] {
         display: none !important;
     }
     </style>
@@ -141,7 +130,7 @@ with col1:
 
 with col2:
     st.markdown(
-        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project</h1>",
+        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project </h1>",
         unsafe_allow_html=True,
     )
 
@@ -149,6 +138,16 @@ with col3:
     st.image(logo_url, width=220)
 
 st.markdown("---")
+
+# ===================== THEME SETTINGS =====================
+bg_color = "#ffffff"
+text_color = "#003366"
+table_colors = {
+    "Not Started": "#cce6ff",
+    "In Progress": "#ffeb99",
+    "Completed": "#b3ffd9",
+    "Overdue": "#ffb3b3",
+}
 
 # ===================== LOAD DATA =====================
 @st.cache_data
@@ -170,7 +169,9 @@ if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
 
-    df_main = df_main.fillna("Null").replace("NaT", "Null")
+    df_main = df_main.fillna("Null")
+    df_main = df_main.replace("NaT", "Null")
+
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
@@ -211,23 +212,62 @@ with tabs[0]:
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c2:
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c3:
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        with c4:
-            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-            st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+        with st.container():
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c4:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Additional Insights section (unchanged)
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            df_duration = df_main.copy().replace("Null", None)
+            df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
+            df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
+            df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+            avg_duration = df_duration["Duration"].mean()
+
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
+
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
+
+            st.markdown("#### 🧭 Phase Completion Dials")
+            bucket_cols = st.columns(2)
+            for i, row in enumerate(completion_by_bucket.itertuples()):
+                with bucket_cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(row._2, 100, row._1, "#006666"),
+                        use_container_width=True,
+                    )
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
@@ -235,23 +275,31 @@ with tabs[1]:
 
     def df_to_html(df):
         html = "<table>"
-        html += "<tr>" + "".join(f"<th>{col}</th>" for col in df.columns) + "</tr>"
+        html += "<tr>"
+        for col in df.columns:
+            html += f"<th>{col}</th>"
+        html += "</tr>"
         for _, row in df.iterrows():
-            progress = str(row.get("Progress", "")).lower()
-            row_color = "#ffffff"
-            if "due date" in df.columns:
-                due_date = pd.to_datetime(row.get("Due date"), errors="coerce")
+            row_color = bg_color
+            if "Progress" in df.columns and "Due date" in df.columns:
+                progress = str(row["Progress"]).lower()
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
                 if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
-                    row_color = "#ffb3b3"
+                    row_color = table_colors["Overdue"]
                 elif progress == "in progress":
-                    row_color = "#ffeb99"
+                    row_color = table_colors["In Progress"]
                 elif progress == "not started":
-                    row_color = "#cce6ff"
+                    row_color = table_colors["Not Started"]
                 elif progress == "completed":
-                    row_color = "#b3ffd9"
-            html += f"<tr style='background-color:{row_color};'>" + "".join(
-                f"<td>{cell if str(cell).strip() != 'Null' else '<i style=\"color:gray;\">Null</i>'}</td>" for cell in row
-            ) + "</tr>"
+                    row_color = table_colors["Completed"]
+            html += f"<tr style='background-color:{row_color};'>"
+            for cell in row:
+                cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                html += f"<td>{cell_display}</td>"
+            html += "</tr>"
         html += "</table>"
         return html
 
@@ -297,7 +345,8 @@ with tabs[3]:
         styles = getSampleStyleSheet()
 
         cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
-        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey, leading=10, alignment=1, fontName="Helvetica-Oblique")
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
 
         story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
@@ -308,11 +357,12 @@ with tabs[3]:
 
         kpi_data = [
             ["Metric", "Count"],
-            ["Total Tasks", len(df_main)],
+            ["Total Tasks", total],
             ["Completed", completed],
             ["In Progress", inprogress],
             ["Not Started", notstarted],
             ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A"],
         ]
         table = Table(kpi_data, colWidths=[200, 100])
         table.setStyle(TableStyle([
@@ -324,13 +374,17 @@ with tabs[3]:
         story.append(table)
         story.append(Spacer(1, 20))
 
-        limited = df_main.head(15).fillna("Null").replace("NaT", "Null")
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
         data = [list(limited.columns)]
         for _, row in limited.iterrows():
-            wrapped_row = [
-                Paragraph("<i>Null</i>", null_style) if str(cell).strip() == "Null" else Paragraph(str(cell), cell_style)
-                for cell in row
-            ]
+            wrapped_row = []
+            for cell in row:
+                if str(cell).strip() == "Null":
+                    wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                else:
+                    wrapped_row.append(Paragraph(str(cell), cell_style))
             data.append(wrapped_row)
 
         col_count = len(limited.columns)
@@ -341,9 +395,11 @@ with tabs[3]:
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]))
+
         story.append(task_table)
         story.append(Spacer(1, 20))
         story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+
         doc.build(story)
 
         st.download_button(
@@ -354,3 +410,4 @@ with tabs[3]:
         )
     else:
         st.warning("No data found to export.")
+
