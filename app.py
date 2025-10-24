@@ -11,31 +11,45 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # ===================== PAGE CONFIGURATION =====================
-st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
+st.set_page_config(
+    page_title="eThekwini WS-7761 Smart Meter Project",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# ===================== CUSTOM STYLE =====================
+# ===================== FORCE WHITE THEME =====================
+# Remove dark mode or device theme support
 st.markdown(
     """
     <style>
+    /* Disable Streamlit theme detection */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        color: #003366 !important;
+    }
+
+    /* General body */
     body {
-        background-color: #f7f9fb;
         font-family: 'Segoe UI', sans-serif;
-        color: #003366;
+        background-color: #ffffff !important;
+        color: #003366 !important;
     }
-    [data-testid="stAppViewContainer"] {
-        background-color: #f7f9fb;
-        padding: 1rem 2rem;
-    }
+
+    /* Header */
     [data-testid="stHeader"] {
         background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
-        color: white;
+        color: white !important;
         font-weight: bold;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-    h1, h2, h3 {
-        color: #003366 !important;
-        font-weight: 600;
+
+    /* Main container */
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        padding: 1rem 2rem;
     }
+
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -50,24 +64,37 @@ st.markdown(
         background-color: #007acc !important;
         color: white !important;
     }
-    div[data-testid="stMarkdownContainer"] {
-        color: #003366;
+
+    /* Headers */
+    h1, h2, h3 {
+        color: #003366 !important;
+        font-weight: 600;
     }
+
+    /* Markdown text */
+    div[data-testid="stMarkdownContainer"] {
+        color: #003366 !important;
+    }
+
+    /* Metric cards */
     .metric-card {
-        background-color: #eaf4ff;
+        background-color: #f5f9ff;
         border-radius: 16px;
         padding: 1rem;
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         margin-bottom: 1rem;
     }
+
+    /* Tables */
     table {
         border-collapse: collapse;
         width: 100%;
         border-radius: 10px;
         overflow: hidden;
+        background-color: #ffffff !important;
     }
     th {
-        background-color: #007acc;
+        background-color: #007acc !important;
         color: white !important;
         text-align: center;
         padding: 8px;
@@ -75,9 +102,15 @@ st.markdown(
     td {
         padding: 6px;
         text-align: center;
+        color: #003366 !important;
     }
     tr:nth-child(even) {background-color: #f0f6fb;}
     tr:hover {background-color: #d6ecff;}
+
+    /* Remove dark mode toggles entirely */
+    [data-testid="stToolbar"], button[data-testid="baseButton-secondary"], [data-testid="stThemeToggle"] {
+        display: none !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -169,7 +202,7 @@ with tabs[0]:
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                         "bar": {"color": dial_color, "thickness": 0.3},
-                        "bgcolor": "#f7f9fb",
+                        "bgcolor": "#ffffff",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
@@ -198,7 +231,7 @@ with tabs[0]:
                 st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-        # Additional Insights section (kept unchanged)
+        # Additional Insights section (unchanged)
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
             df_duration = df_main.copy().replace("Null", None)
