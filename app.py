@@ -10,52 +10,37 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Tabl
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# ======================================================
-#   PAGE CONFIGURATION
-# ======================================================
+# ===================== PAGE CONFIGURATION =====================
 st.set_page_config(
     page_title="eThekwini WS-7761 Smart Meter Project",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# ======================================================
-#   FORCE WHITE THEME (OVERRIDE ANY DARK MODE)
-# ======================================================
+# ===================== FORCE WHITE THEME =====================
+# Remove dark mode or device theme support
 st.markdown(
     """
     <style>
-    /* Override ALL browser/system themes */
-    @media (prefers-color-scheme: dark) {
-        html, body, [class*="stApp"], [data-testid="stAppViewContainer"] {
-            background-color: #ffffff !important;
-            color: #003366 !important;
-        }
-    }
-
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stToolbar"] {
+    /* Disable Streamlit theme detection */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
         background-color: #ffffff !important;
         color: #003366 !important;
     }
 
+    /* General body */
     body {
         font-family: 'Segoe UI', sans-serif;
         background-color: #ffffff !important;
         color: #003366 !important;
     }
 
-    /* Header styling */
+    /* Header */
     [data-testid="stHeader"] {
         background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
         color: white !important;
         font-weight: bold;
         box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background-color: #f5f9ff !important;
-        color: #003366 !important;
     }
 
     /* Main container */
@@ -64,7 +49,7 @@ st.markdown(
         padding: 1rem 2rem;
     }
 
-    /* Tabs styling */
+    /* Tabs */
     .stTabs [data-baseweb="tab-list"] {
         gap: 10px;
     }
@@ -80,7 +65,7 @@ st.markdown(
         color: white !important;
     }
 
-    /* Headings */
+    /* Headers */
     h1, h2, h3 {
         color: #003366 !important;
         font-weight: 600;
@@ -122,10 +107,8 @@ st.markdown(
     tr:nth-child(even) {background-color: #f0f6fb;}
     tr:hover {background-color: #d6ecff;}
 
-    /* Hide dark mode toggles */
-    [data-testid="stThemeToggle"],
-    button[data-testid="baseButton-secondary"],
-    [data-testid="stToolbar"] {
+    /* Remove dark mode toggles entirely */
+    [data-testid="stToolbar"], button[data-testid="baseButton-secondary"], [data-testid="stThemeToggle"] {
         display: none !important;
     }
     </style>
@@ -133,9 +116,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ======================================================
-#   HEADER WITH LOGO
-# ======================================================
+# ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 data_path = "Ethekwini WS-7761.xlsx"
 
@@ -149,7 +130,7 @@ with col1:
 
 with col2:
     st.markdown(
-        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project</h1>",
+        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project </h1>",
         unsafe_allow_html=True,
     )
 
@@ -158,9 +139,7 @@ with col3:
 
 st.markdown("---")
 
-# ======================================================
-#   THEME SETTINGS
-# ======================================================
+# ===================== THEME SETTINGS =====================
 bg_color = "#ffffff"
 text_color = "#003366"
 table_colors = {
@@ -170,9 +149,7 @@ table_colors = {
     "Overdue": "#ffb3b3",
 }
 
-# ======================================================
-#   LOAD DATA
-# ======================================================
+# ===================== LOAD DATA =====================
 @st.cache_data
 def load_data(path=data_path):
     xls = pd.ExcelFile(path)
@@ -187,25 +164,20 @@ def load_data(path=data_path):
 sheets = load_data()
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
 
-# ======================================================
-#   CLEAN DATA
-# ======================================================
+# ===================== CLEAN DATA =====================
 if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
 
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
+
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
-# ======================================================
-#   MAIN TABS
-# ======================================================
+# ===================== MAIN TABS =====================
 tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
 
-# ======================================================
-#   KPI TAB
-# ======================================================
+# ===================== KPI TAB =====================
 with tabs[0]:
     if not df_main.empty:
         st.subheader("Key Performance Indicators")
@@ -240,28 +212,70 @@ with tabs[0]:
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
-        c1, c2, c3, c4 = st.columns(4)
-        for i, (title, val, colr) in enumerate(
-            [
-                ("Not Started", notstarted, dial_colors[0]),
-                ("In Progress", inprogress, dial_colors[1]),
-                ("Completed", completed, dial_colors[2]),
-                ("Overdue", overdue, dial_colors[3]),
-            ]
-        ):
-            with [c1, c2, c3, c4][i]:
+        with st.container():
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
                 st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.plotly_chart(create_colored_gauge(val, total, title, colr), use_container_width=True)
+                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c4:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-# ======================================================
-#   TASK BREAKDOWN TAB
-# ======================================================
+        # Additional Insights section (unchanged)
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            df_duration = df_main.copy().replace("Null", None)
+            df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
+            df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
+            df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+            avg_duration = df_duration["Duration"].mean()
+
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
+
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
+
+            st.markdown("#### 🧭 Phase Completion Dials")
+            bucket_cols = st.columns(2)
+            for i, row in enumerate(completion_by_bucket.itertuples()):
+                with bucket_cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(row._2, 100, row._1, "#006666"),
+                        use_container_width=True,
+                    )
+
+# ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
 
     def df_to_html(df):
-        html = "<table><tr>"
+        html = "<table>"
+        html += "<tr>"
         for col in df.columns:
             html += f"<th>{col}</th>"
         html += "</tr>"
@@ -269,7 +283,10 @@ with tabs[1]:
             row_color = bg_color
             if "Progress" in df.columns and "Due date" in df.columns:
                 progress = str(row["Progress"]).lower()
-                due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
                 if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
                     row_color = table_colors["Overdue"]
                 elif progress == "in progress":
@@ -288,9 +305,7 @@ with tabs[1]:
 
     st.markdown(df_to_html(df_main), unsafe_allow_html=True)
 
-# ======================================================
-#   TIMELINE TAB
-# ======================================================
+# ===================== TIMELINE TAB =====================
 with tabs[2]:
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
         df_copy = df_main.replace("Null", None)
@@ -319,9 +334,7 @@ with tabs[2]:
     else:
         st.info("Timeline data not available.")
 
-# ======================================================
-#   EXPORT REPORT TAB
-# ======================================================
+# ===================== EXPORT REPORT TAB =====================
 with tabs[3]:
     st.subheader("📄 Export Smart Meter Project Report")
 
@@ -332,7 +345,8 @@ with tabs[3]:
         styles = getSampleStyleSheet()
 
         cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
-        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey, leading=10, alignment=1, fontName="Helvetica-Oblique")
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
 
         story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
@@ -348,6 +362,7 @@ with tabs[3]:
             ["In Progress", inprogress],
             ["Not Started", notstarted],
             ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A"],
         ]
         table = Table(kpi_data, colWidths=[200, 100])
         table.setStyle(TableStyle([
@@ -359,7 +374,9 @@ with tabs[3]:
         story.append(table)
         story.append(Spacer(1, 20))
 
-        limited = df_main.head(15).copy().fillna("Null").replace("NaT", "Null")
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
         data = [list(limited.columns)]
         for _, row in limited.iterrows():
             wrapped_row = []
@@ -382,6 +399,7 @@ with tabs[3]:
         story.append(task_table)
         story.append(Spacer(1, 20))
         story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+
         doc.build(story)
 
         st.download_button(
