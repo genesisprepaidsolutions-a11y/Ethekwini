@@ -1,207 +1,288 @@
-
 import streamlit as st
 import pandas as pd
-import numpy as np
+import plotly.graph_objects as go
 import plotly.express as px
-from pathlib import Path
 from datetime import datetime
+import os
+from io import BytesIO
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-st.set_page_config(page_title="Ethekwini — Dashboard (Excel replica)", layout="wide")
+# ===================== PAGE CONFIGURATION =====================
+st.set_page_config(
+    page_title="eThekwini WS-7761 Smart Meter Project",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- Styling (clean corporate) ---
+# ===================== FORCE WHITE THEME =====================
 st.markdown(
     """
     <style>
-    .stApp { font-family: "Segoe UI", Roboto, Arial; }
-    .kpi { background: #ffffff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    .phase-bar { background: linear-gradient(90deg,#0d6efd,#60a5fa); height:18px; border-radius:6px; }
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        color: #003366 !important;
+    }
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background-color: #ffffff !important;
+        color: #003366 !important;
+    }
+    [data-testid="stHeader"] {
+        background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
+        color: white !important;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    [data-testid="stAppViewContainer"] {
+        background-color: #ffffff !important;
+        padding: 1rem 2rem;
+    }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #eaf4ff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        color: #003366;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #007acc !important;
+        color: white !important;
+    }
+    h1, h2, h3 { color: #003366 !important; font-weight: 600; }
+    div[data-testid="stMarkdownContainer"] { color: #003366 !important; }
+    .metric-card {
+        background-color: #f5f9ff;
+        border-radius: 16px;
+        padding: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+        background-color: #ffffff !important;
+    }
+    th {
+        background-color: #007acc !important;
+        color: white !important;
+        text-align: center;
+        padding: 8px;
+    }
+    td {
+        padding: 6px;
+        text-align: center;
+        color: #003366 !important;
+    }
+    tr:nth-child(even) { background-color: #f0f6fb; }
+    tr:hover { background-color: #d6ecff; }
+    [data-testid="stToolbar"], button[data-testid="baseButton-secondary"], [data-testid="stThemeToggle"] {
+        display: none !important;
+    }
     </style>
-    """, unsafe_allow_html=True
+    """,
+    unsafe_allow_html=True,
 )
 
+# ===================== HEADER WITH LOGO =====================
+logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
+data_path = "Ethekwini WS-7761.xlsx"
+
+col1, col2, col3 = st.columns([2, 6, 1])
+with col1:
+    if os.path.exists(data_path):
+        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
+    else:
+        file_date = datetime.now().strftime("%d %B %Y")
+    st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
+
+with col2:
+    st.markdown("<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project</h1>", unsafe_allow_html=True)
+
+with col3:
+    st.image(logo_url, width=220)
+
+st.markdown("---")
+
+# ===================== LOAD DATA =====================
 @st.cache_data
-def load_workbook(path):
+def load_data(path=data_path):
     xls = pd.ExcelFile(path)
-    sheets = {s: pd.read_excel(xls, sheet_name=s) for s in xls.sheet_names}
+    sheets = {}
+    for s in xls.sheet_names:
+        try:
+            sheets[s] = pd.read_excel(xls, sheet_name=s)
+        except Exception:
+            sheets[s] = pd.DataFrame()
     return sheets
 
-# Load default workbook (allow uploader to override)
-uploaded = st.file_uploader("Upload an Excel workbook (.xlsx) to replicate", type=["xlsx"])
-if uploaded is not None:
-    sheets = load_workbook(uploaded)
-    src_label = "Uploaded"
-else:
-    default_path = Path(__file__).parent / "Ethekwini WS-7761 07 Oct 2025.xlsx"
-    if default_path.exists():
-        sheets = load_workbook(default_path)
-        src_label = "Default workbook"
+sheets = load_data()
+df_main = sheets.get("Tasks", pd.DataFrame()).copy()
+
+# ===================== CLEAN DATA =====================
+if not df_main.empty:
+    for c in [col for col in df_main.columns if "date" in col.lower()]:
+        df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
+
+    df_main = df_main.fillna("Null")
+    df_main = df_main.replace("NaT", "Null")
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
+
+# ===================== MAIN TABS =====================
+tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Installations", "Export Report"])
+
+# ===================== KPI TAB =====================
+with tabs[0]:
+    if not df_main.empty:
+        st.subheader("Key Performance Indicators")
+
+        total = len(df_main)
+        completed = df_main["Progress"].str.lower().eq("completed").sum()
+        inprogress = df_main["Progress"].str.lower().eq("in progress").sum()
+        notstarted = df_main["Progress"].str.lower().eq("not started").sum()
+        overdue = (
+            (pd.to_datetime(df_main["Due date"], errors="coerce") < pd.Timestamp.today())
+            & (~df_main["Progress"].str.lower().eq("completed"))
+        ).sum()
+
+        def create_colored_gauge(value, total, title, dial_color):
+            pct = (value / total * 100) if total > 0 else 0
+            fig = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=pct,
+                    number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
+                    title={"text": title, "font": {"size": 20, "color": dial_color}},
+                    gauge={
+                        "axis": {"range": [0, 100]},
+                        "bar": {"color": dial_color, "thickness": 0.3},
+                        "bgcolor": "#ffffff",
+                        "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
+                    },
+                )
+            )
+            fig.update_layout(height=270, margin=dict(l=15, r=15, t=40, b=20))
+            return fig
+
+        st.markdown("#### 📊 KPI Overview")
+        kpi_cols = st.columns(4)
+        with kpi_cols[0]:
+            st.plotly_chart(create_colored_gauge(completed, total, "Completed", "#00b386"), use_container_width=True)
+        with kpi_cols[1]:
+            st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", "#007acc"), use_container_width=True)
+        with kpi_cols[2]:
+            st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", "#e67300"), use_container_width=True)
+        with kpi_cols[3]:
+            st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", "#cc0000"), use_container_width=True)
+
+# ===================== TASK BREAKDOWN TAB =====================
+with tabs[1]:
+    st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
+    def df_to_html(df):
+        html = "<table><tr>" + "".join(f"<th>{c}</th>" for c in df.columns) + "</tr>"
+        for _, row in df.iterrows():
+            html += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+        html += "</table>"
+        return html
+    st.markdown(df_to_html(df_main), unsafe_allow_html=True)
+
+# ===================== TIMELINE TAB =====================
+with tabs[2]:
+    if "Start date" in df_main.columns and "Due date" in df_main.columns:
+        df_copy = df_main.replace("Null", None)
+        timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
+        if not timeline.empty:
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {"Not Started": "#66b3ff", "In Progress": "#3399ff", "Completed": "#33cc33"}
+            timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
+            fig_tl = px.timeline(
+                timeline,
+                x_start="Start date",
+                x_end="Due date",
+                y="task_short",
+                color="Progress",
+                title="Task Timeline",
+                color_discrete_map=progress_color_map,
+            )
+            fig_tl.update_yaxes(autorange="reversed")
+            st.plotly_chart(fig_tl, use_container_width=True)
     else:
-        st.error("Default workbook not found. Please upload the Excel file.")
-        st.stop()
+        st.info("Timeline data not available.")
 
-st.sidebar.header("Filters (applied to TASKS-based KPIs)")
-# We'll read TASKS sheet if available
-tasks_sheet = None
-for candidate in ["TASKS","Tasks","tasks","Task list","Task List"]:
-    if candidate in sheets:
-        tasks_sheet = candidate
-        break
-# fallback to first sheet
-if tasks_sheet is None:
-    tasks_sheet = list(sheets.keys())[0]
+# ===================== INSTALLATION TAB =====================
+with tabs[3]:
+    st.subheader("🧰 Contractor Installation Insights")
+    if "Installation" in sheets:
+        df_inst = sheets["Installation"].copy()
+        df_inst.columns = [c.lower().strip() for c in df_inst.columns]
+        if "contractor" in df_inst.columns and "count of installations" in df_inst.columns:
+            contractors = df_inst[["contractor", "count of installations"]].dropna()
+            contractors["count of installations"] = pd.to_numeric(contractors["count of installations"], errors="coerce").fillna(0)
 
-# Detect phase summary sheets like "Total vs Complete *"
-phase_summaries = {}
-for name, df in sheets.items():
-    low = name.lower().strip()
-    if low.startswith("total") and "complete" in low:
-        # attempt to extract two numeric values (total, complete)
-        # find first two numeric-like cells in sheet
-        flat = df.replace(r'^\s*$', np.nan, regex=True).stack().reset_index(drop=True)
-        nums = flat[flat.apply(lambda x: pd.to_numeric(x, errors="coerce")).notna()].apply(pd.to_numeric, errors="coerce")
-        vals = nums.tolist()
-        if len(vals) >= 2:
-            phase_summaries[name] = {"total": float(vals[0]), "complete": float(vals[1])}
-        elif len(vals) == 1:
-            phase_summaries[name] = {"total": float(vals[0]), "complete": 0.0}
+            def create_count_gauge(value, title, dial_color="#007acc"):
+                fig = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=value,
+                        title={"text": title, "font": {"size": 18, "color": "#003366"}},
+                        number={"font": {"size": 28, "color": dial_color}},
+                        gauge={
+                            "axis": {"range": [0, max(contractors["count of installations"]) * 1.2]},
+                            "bar": {"color": dial_color, "thickness": 0.3},
+                            "bgcolor": "#f5f9ff",
+                            "steps": [{"range": [0, value], "color": "#d9ecff"}],
+                        },
+                    )
+                )
+                fig.update_layout(height=260, margin=dict(l=15, r=15, t=40, b=20))
+                return fig
+
+            dial_colors = ["#007acc", "#009999", "#00b386", "#e67300", "#3399ff", "#3366cc"]
+
+            for i in range(0, len(contractors), 3):
+                cols = st.columns(3)
+                for j, col in enumerate(cols):
+                    if i + j < len(contractors):
+                        row = contractors.iloc[i + j]
+                        with col:
+                            st.plotly_chart(
+                                create_count_gauge(
+                                    row["count of installations"],
+                                    row["contractor"],
+                                    dial_colors[(i + j) % len(dial_colors)],
+                                ),
+                                use_container_width=True,
+                            )
         else:
-            # try named columns with totals
-            try:
-                colnums = df.select_dtypes(include=[np.number]).iloc[0].tolist()
-                if len(colnums) >= 2:
-                    phase_summaries[name] = {"total": float(colnums[0]), "complete": float(colnums[1])}
-            except Exception:
-                pass
-
-# Load TASKS sheet dataframe for overall KPIs if present
-df_tasks = sheets.get(tasks_sheet).copy() if tasks_sheet in sheets else pd.DataFrame()
-
-# normalize column names
-df_tasks.columns = [str(c).strip() for c in df_tasks.columns]
-
-# Detect key columns
-def detect_column(df, keywords):
-    for c in df.columns:
-        low = str(c).lower()
-        for k in keywords:
-            if k in low:
-                return c
-    return None
-
-col_task = detect_column(df_tasks, ["task","description","work"])
-col_bucket = detect_column(df_tasks, ["bucket","ward","zone","area","phase"])
-col_progress = detect_column(df_tasks, ["progress","status"])
-col_due = detect_column(df_tasks, ["due"])
-col_completed = detect_column(df_tasks, ["completed","completion"])
-col_priority = detect_column(df_tasks, ["priority"])
-
-# Parse dates
-for c in [col_due, col_completed]:
-    if c and c in df_tasks.columns:
-        try:
-            df_tasks[c] = pd.to_datetime(df_tasks[c], errors="coerce")
-        except Exception:
-            pass
-
-# Define completed flag logic
-def completed_flag(row):
-    prog = str(row.get(col_progress, "")).lower() if col_progress else ""
-    comp = row.get(col_completed) if col_completed else None
-    if pd.notna(comp):
-        return True
-    if "complete" in prog or prog in ["done","closed","finished"]:
-        return True
-    return False
-
-if not df_tasks.empty:
-    df_tasks["_completed"] = df_tasks.apply(completed_flag, axis=1)
-else:
-    df_tasks["_completed"] = pd.Series(dtype=bool)
-
-# Overall KPIs
-total_tasks = int(len(df_tasks)) if not df_tasks.empty else 0
-completed_tasks = int(df_tasks["_completed"].sum()) if not df_tasks.empty else 0
-today = pd.to_datetime(pd.Timestamp.now().date())
-if col_due and not df_tasks.empty:
-    overdue_mask = (pd.to_datetime(df_tasks[col_due], errors="coerce").notna()) & (pd.to_datetime(df_tasks[col_due], errors="coerce").dt.date < today.date()) & (~df_tasks["_completed"])
-    overdue_tasks = int(overdue_mask.sum())
-else:
-    overdue_tasks = 0
-
-pct_complete = (completed_tasks / total_tasks * 100) if total_tasks>0 else 0.0
-
-# Sidebar filters for TASKS (if available)
-if not df_tasks.empty and col_bucket:
-    buckets = sorted(df_tasks[col_bucket].dropna().unique().tolist())
-    sel_bucket = st.sidebar.selectbox("Bucket / Zone (All)", options=["All"] + buckets)
-    if sel_bucket != "All":
-        df_display = df_tasks[df_tasks[col_bucket]==sel_bucket]
+            st.warning("⚠️ 'Contractor' or 'Count of Installations' column missing in Installation tab.")
     else:
-        df_display = df_tasks.copy()
-else:
-    df_display = df_tasks.copy()
+        st.warning("⚠️ Installation tab not found in the Excel file.")
 
-# Top row KPIs in layout similar to Excel dashboard
-k1,k2,k3,k4 = st.columns([1.2,1.2,1.2,1])
-st.markdown("<div class='kpi'>", unsafe_allow_html=True)
-k1.metric("Total tasks", f"{total_tasks:,}")
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<div class='kpi'>", unsafe_allow_html=True)
-k2.metric("Completed tasks", f"{completed_tasks:,}", delta=f"{pct_complete:.1f}%")
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<div class='kpi'>", unsafe_allow_html=True)
-k3.metric("Overdue tasks", f"{overdue_tasks:,}")
-st.markdown("</div>", unsafe_allow_html=True)
-st.markdown("<div class='kpi'>", unsafe_allow_html=True)
-k4.metric("% Complete", f"{pct_complete:.1f}%")
-st.markdown("</div>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# Middle section: progress bars per phase. Use phase_summaries if available; else derive from TASKS by Bucket/Phase
-st.subheader("Progress by Phase")
-
-phases = []
-if phase_summaries:
-    for name, vals in phase_summaries.items():
-        # Normalize name to a short label
-        label = name.replace("Total vs Complete","").strip() or name
-        total = int(vals.get("total",0))
-        complete = int(vals.get("complete",0))
-        percent = (complete/total*100) if total>0 else 0
-        phases.append({"phase": label, "total": total, "complete": complete, "pct": percent})
-else:
-    # attempt to use bucket/phase column in tasks
-    if col_bucket and not df_tasks.empty:
-        grp = df_tasks.groupby(col_bucket).agg(total=("index","size"), complete=("_completed","sum")).reset_index()
-        for _, r in grp.iterrows():
-            pct = (r["complete"]/r["total"]*100) if r["total"]>0 else 0
-            phases.append({"phase": r[col_bucket], "total": int(r["total"]), "complete": int(r["complete"]), "pct": pct})
-
-# Render progress bars similar to Excel dashboard
-for p in phases:
-    st.markdown(f"**{p['phase']}** — {p['complete']} / {p['total']} completed ({p['pct']:.1f}%)")
-    # simple progress bar
-    st.progress(int(p['pct']) if p['pct']<=100 else 100)
-
-st.markdown("---")
-
-# Bottom charts: Completed vs Total by Phase, and Task distribution
-st.subheader("Phase Completion — Chart")
-if phases:
-    phases_df = pd.DataFrame(phases)
-    fig = px.bar(phases_df, x="phase", y=["complete","total"], barmode="group", title="Completed vs Total by Phase")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("No phase summary data detected in workbook and no bucket/phase column found in TASKS sheet.")
-
-st.markdown("### Task distribution by Progress status")
-if not df_tasks.empty and col_progress:
-    dist = df_display.groupby(col_progress).size().reset_index(name="count")
-    fig2 = px.pie(dist, names=col_progress, values="count", title="Tasks by Progress")
-    st.plotly_chart(fig2, use_container_width=True)
-else:
-    st.info("No TASKS or Progress column available to show distribution.")
-
-st.markdown("---")
-st.caption(f"Dashboard built from: {src_label}. Sheets used: " + ", ".join(list(sheets.keys())))
+# ===================== EXPORT REPORT TAB =====================
+with tabs[4]:
+    st.subheader("📄 Export Smart Meter Project Report")
+    if not df_main.empty:
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        story = []
+        styles = getSampleStyleSheet()
+        story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
+        story.append(Spacer(1, 12))
+        story.append(Image(logo_url, width=120, height=70))
+        story.append(Spacer(1, 12))
+        doc.build(story)
+        st.download_button(
+            "📥 Download PDF Report",
+            data=buf.getvalue(),
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+            mime="application/pdf",
+        )
+    else:
+        st.warning("No data found to export.")
