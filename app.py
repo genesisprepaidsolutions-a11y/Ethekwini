@@ -177,7 +177,6 @@ with tabs[0]:
             fig.update_layout(height=270, margin=dict(l=15, r=15, t=40, b=20))
             return fig
 
-        # ===================== ADDITIONAL INSIGHTS =====================
         with st.expander("📈 Additional Insights", expanded=True):
             st.markdown("### Expanded Project Insights")
 
@@ -188,20 +187,63 @@ with tabs[0]:
             avg_duration = df_duration["Duration"].mean()
             st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
 
+            # Contractor installation insight section stays here for KPI context
+            if "Installation" in sheets:
+                df_inst = sheets["Installation"].copy()
+                df_inst.columns = [c.lower().strip() for c in df_inst.columns]
+                if "contractor" in df_inst.columns and "count of installations" in df_inst.columns:
+                    st.markdown("#### 🧰 Contractor Installation Insights")
+                    contractors = df_inst[["contractor", "count of installations"]].dropna()
+                    contractors["count of installations"] = pd.to_numeric(contractors["count of installations"], errors="coerce").fillna(0)
+
+                    def create_count_gauge(value, title, dial_color="#007acc"):
+                        fig = go.Figure(
+                            go.Indicator(
+                                mode="gauge+number",
+                                value=value,
+                                title={"text": title, "font": {"size": 18, "color": "#003366"}},
+                                number={"font": {"size": 28, "color": dial_color}},
+                                gauge={
+                                    "axis": {"range": [0, max(contractors["count of installations"]) * 1.2]},
+                                    "bar": {"color": dial_color, "thickness": 0.3},
+                                    "bgcolor": "#f5f9ff",
+                                    "steps": [{"range": [0, value], "color": "#d9ecff"}],
+                                },
+                            )
+                        )
+                        fig.update_layout(height=260, margin=dict(l=15, r=15, t=40, b=20))
+                        return fig
+
+                    dial_colors = ["#007acc", "#009999", "#00b386", "#e67300", "#3399ff", "#3366cc"]
+
+                    for i in range(0, len(contractors), 3):
+                        cols = st.columns(3)
+                        for j, col in enumerate(cols):
+                            if i + j < len(contractors):
+                                row = contractors.iloc[i + j]
+                                with col:
+                                    st.plotly_chart(
+                                        create_count_gauge(
+                                            row["count of installations"],
+                                            row["contractor"],
+                                            dial_colors[(i + j) % len(dial_colors)],
+                                        ),
+                                        use_container_width=True,
+                                    )
+                else:
+                    st.warning("⚠️ 'Contractor' or 'Count of Installations' column missing in Installation tab.")
+            else:
+                st.warning("⚠️ Installation tab not found in Excel file.")
+
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[1]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
-
     def df_to_html(df):
         html = "<table><tr>" + "".join(f"<th>{c}</th>" for c in df.columns) + "</tr>"
         for _, row in df.iterrows():
-            html += "<tr>"
-            for cell in row:
-                html += f"<td>{cell}</td>"
-            html += "</tr>"
+            html += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
         html += "</table>"
         return html
-
     st.markdown(df_to_html(df_main), unsafe_allow_html=True)
 
 # ===================== TIMELINE TAB =====================
@@ -233,4 +275,74 @@ with tabs[3]:
 
     if "Installation" in sheets:
         df_inst = sheets["Installation"].copy()
-        df_inst.columns = [c.lower().strip() for c in df]()_
+        df_inst.columns = [c.lower().strip() for c in df_inst.columns]
+
+        if "contractor" in df_inst.columns and "count of installations" in df_inst.columns:
+            contractors = df_inst[["contractor", "count of installations"]].dropna()
+            contractors["count of installations"] = pd.to_numeric(contractors["count of installations"], errors="coerce").fillna(0)
+
+            def create_count_gauge(value, title, dial_color="#007acc"):
+                fig = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=value,
+                        title={"text": title, "font": {"size": 18, "color": "#003366"}},
+                        number={"font": {"size": 28, "color": dial_color}},
+                        gauge={
+                            "axis": {"range": [0, max(contractors["count of installations"]) * 1.2]},
+                            "bar": {"color": dial_color, "thickness": 0.3},
+                            "bgcolor": "#f5f9ff",
+                            "steps": [{"range": [0, value], "color": "#d9ecff"}],
+                        },
+                    )
+                )
+                fig.update_layout(height=260, margin=dict(l=15, r=15, t=40, b=20))
+                return fig
+
+            dial_colors = ["#007acc", "#009999", "#00b386", "#e67300", "#3399ff", "#3366cc"]
+
+            for i in range(0, len(contractors), 3):
+                cols = st.columns(3)
+                for j, col in enumerate(cols):
+                    if i + j < len(contractors):
+                        row = contractors.iloc[i + j]
+                        with col:
+                            st.plotly_chart(
+                                create_count_gauge(
+                                    row["count of installations"],
+                                    row["contractor"],
+                                    dial_colors[(i + j) % len(dial_colors)],
+                                ),
+                                use_container_width=True,
+                            )
+        else:
+            st.warning("⚠️ 'Contractor' or 'Count of Installations' column missing in Installation tab.")
+    else:
+        st.warning("⚠️ Installation tab not found in Excel file.")
+
+# ===================== EXPORT REPORT TAB =====================
+with tabs[4]:
+    st.subheader("📄 Export Smart Meter Project Report")
+
+    if not df_main.empty:
+        buf = BytesIO()
+        doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+        story = []
+        styles = getSampleStyleSheet()
+
+        story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
+        story.append(Spacer(1, 12))
+        story.append(Image(logo_url, width=120, height=70))
+        story.append(Spacer(1, 12))
+
+        doc.build(story)
+        st.download_button(
+            "📥 Download PDF Report",
+            data=buf.getvalue(),
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+            mime="application/pdf",
+        )
+    else:
+        st.warning("No data found to export.")
