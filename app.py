@@ -292,7 +292,7 @@ with tabs[4]:
         ]
         table = Table(kpi_data, colWidths=[200, 100])
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
             ("GRID", (0, 0), (-1, -1), 1, colors.grey),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ]))
