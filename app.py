@@ -400,8 +400,79 @@ with tabs[2]:
 # ===================== INSTALLATIONS TAB =====================
 with tabs[3]:
     st.subheader("Installations Summary (from Weekly update sheet.xlsx)")
+
+    # Prepare installation KPI values
+    total_installations = 0
+    total_sites = 0
+    avg_installed_per_contractor = 0
+    contractors_count = 0
+
     if df_installations is not None and not df_installations.empty:
-        # Display a neat styled table
+        # Ensure columns exist and are numeric
+        if "total number of installed" in df_installations.columns:
+            total_installations = int(df_installations["total number of installed"].sum())
+        if "total number of sites" in df_installations.columns:
+            total_sites = int(df_installations["total number of sites"].sum())
+        contractors_count = df_installations["Contractor"].replace("nan", "").replace("None", "").astype(str).str.strip().replace("", pd.NA).dropna().shape[0]
+        if contractors_count > 0:
+            avg_installed_per_contractor = round(total_installations / contractors_count, 1)
+        else:
+            avg_installed_per_contractor = 0
+
+        # Create absolute-style gauges for the three metrics
+        def create_absolute_gauge(title, value, max_value, dial_color):
+            # avoid zero-range gauge
+            max_val = max(1, int(max_value))
+            # clamp value to max for display
+            disp_val = min(int(value), max_val)
+            fig = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=disp_val,
+                    number={"suffix": "", "font": {"size": 30, "color": dial_color}},
+                    title={"text": f"{title}", "font": {"size": 18, "color": dial_color}},
+                    gauge={
+                        "axis": {"range": [0, max_val], "tickwidth": 1, "tickcolor": "gray"},
+                        "bar": {"color": dial_color, "thickness": 0.3},
+                        "bgcolor": "#f7f9fb",
+                        "steps": [{"range": [0, max_val], "color": "#e0e0e0"}],
+                    },
+                )
+            )
+            fig.update_layout(height=250, margin=dict(l=10, r=10, t=30, b=10))
+            return fig
+
+        # choose reasonable max values for gauges so they're visually meaningful
+        # max for installations = next round up to nearest 10/50 depending on magnitude
+        def sensible_max(n):
+            n = max(1, int(n))
+            if n <= 10:
+                return 10
+            if n <= 100:
+                return ((n // 10) + 1) * 10
+            if n <= 1000:
+                return ((n // 50) + 1) * 50
+            return ((n // 200) + 1) * 200
+
+        max_inst = sensible_max(total_installations)
+        max_sites = sensible_max(total_sites)
+        max_avg = sensible_max(int(avg_installed_per_contractor))
+
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.plotly_chart(create_absolute_gauge("Total Installations", total_installations, max_inst, "#007acc"), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+        with col_b:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.plotly_chart(create_absolute_gauge("Total Sites", total_sites, max_sites, "#003366"), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+        with col_c:
+            st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+            st.plotly_chart(create_absolute_gauge("Avg Installed / Contractor", avg_installed_per_contractor, max_avg, "#00b386"), use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # Display a neat styled table below the dials
         st.table(df_installations.rename(columns={
             "Contractor": "Contractor",
             "total number of installed": "Total Number Installed",
