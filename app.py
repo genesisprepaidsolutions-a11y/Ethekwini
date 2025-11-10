@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -10,10 +11,10 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Tabl
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-# ===================== PAGE CONFIG =====================
+# ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
 
-# ===================== CUSTOM STYLES =====================
+# ===================== CUSTOM STYLE =====================
 st.markdown(
     """
     <style>
@@ -36,6 +37,23 @@ st.markdown(
         color: #003366 !important;
         font-weight: 600;
     }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        background-color: #eaf4ff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        color: #003366;
+        font-weight: 500;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #007acc !important;
+        color: white !important;
+    }
+    div[data-testid="stMarkdownContainer"] {
+        color: #003366;
+    }
     .metric-card {
         background-color: #eaf4ff;
         border-radius: 16px;
@@ -43,14 +61,33 @@ st.markdown(
         box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         margin-bottom: 1rem;
     }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    th {
+        background-color: #007acc;
+        color: white !important;
+        text-align: center;
+        padding: 8px;
+    }
+    td {
+        padding: 6px;
+        text-align: center;
+    }
+    tr:nth-child(even) {background-color: #f0f6fb;}
+    tr:hover {background-color: #d6ecff;}
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# ===================== HEADER =====================
+# ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
-data_path = "Weekly update sheet.xlsx"
+data_path = "Ethekwini WS-7761.xlsx"
+install_path = "Weekly update sheet.xlsx"
 
 col1, col2, col3 = st.columns([2, 6, 1])
 with col1:
@@ -73,71 +110,46 @@ st.markdown("---")
 
 # ===================== LOAD DATA =====================
 @st.cache_data
-def load_data(path):
-    try:
-        xls = pd.ExcelFile(path)
-        sheets = {}
-        for s in xls.sheet_names:
-            try:
-                sheets[s] = pd.read_excel(xls, sheet_name=s)
-            except Exception:
-                sheets[s] = pd.DataFrame()
-        return sheets
-    except Exception:
-        return {}
+def load_data(path=data_path):
+    xls = pd.ExcelFile(path)
+    sheets = {}
+    for s in xls.sheet_names:
+        try:
+            sheets[s] = pd.read_excel(xls, sheet_name=s)
+        except Exception:
+            sheets[s] = pd.DataFrame()
+    return sheets
 
-sheets = load_data(data_path)
-df_main = sheets.get("Tasks", pd.DataFrame())
-if df_main.empty:
-    df_main = pd.DataFrame(columns=["Task Name", "Start date", "Due date", "Progress", "Priority", "Bucket Name"])
+sheets = load_data()
+df_main = sheets.get("Tasks", pd.DataFrame()).copy()
+
+# ===================== CLEAN DATA =====================
+if not df_main.empty:
+    for c in [col for col in df_main.columns if "date" in col.lower()]:
+        df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
+    df_main = df_main.fillna("Null").replace("NaT", "Null")
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
 # ===================== INSTALLATION DATA =====================
-install_data = {
-    "Contractor": ["Deezlo", "Nimba", "Isandiso"],
-    "Installed": [60, 48, 26],
-    "Sites": [155, 156, 156],
-}
-df_install = pd.DataFrame(install_data)
+@st.cache_data
+def load_installation_data(path=install_path):
+    if os.path.exists(path):
+        df = pd.read_excel(path)
+        df.columns = df.columns.str.strip().str.lower()
+        return df
+    else:
+        return pd.DataFrame()
 
-# ===================== TABS =====================
-tabs = st.tabs(["Installations", "KPIs", "Task Breakdown", "Timeline", "Export Report"])
+install_df = load_installation_data()
 
-# ===================== INSTALLATIONS TAB =====================
+# ===================== MAIN TABS =====================
+tabs = st.tabs(["KPIs", "Installations", "Task Breakdown", "Timeline", "Export Report"])
+
+# ===================== KPI TAB =====================
 with tabs[0]:
-    st.subheader("🧰 Installations Overview")
-    st.markdown("Below are the installation dials for each contractor based on the latest weekly update sheet.")
-
-    def create_installation_gauge(installed, total, title, color):
-        pct = (installed / total) * 100 if total > 0 else 0
-        fig = go.Figure(
-            go.Indicator(
-                mode="gauge+number",
-                value=pct,
-                number={"suffix": "%", "font": {"size": 36, "color": color}},
-                title={"text": title, "font": {"size": 20, "color": color}},
-                gauge={
-                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                    "bar": {"color": color, "thickness": 0.3},
-                    "bgcolor": "#f7f9fb",
-                    "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
-                },
-            )
-        )
-        fig.update_layout(height=270, margin=dict(l=15, r=15, t=40, b=20))
-        return fig
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.plotly_chart(create_installation_gauge(60, 155, "Deezlo Installed", "#003366"), use_container_width=True)
-    with c2:
-        st.plotly_chart(create_installation_gauge(48, 156, "Nimba Installed", "#007acc"), use_container_width=True)
-    with c3:
-        st.plotly_chart(create_installation_gauge(26, 156, "Isandiso Installed", "#00b386"), use_container_width=True)
-
-# ===================== KPIs TAB =====================
-with tabs[1]:
-    st.subheader("📊 Key Performance Indicators")
     if not df_main.empty:
+        st.subheader("Key Performance Indicators")
+
         total = len(df_main)
         completed = df_main["Progress"].str.lower().eq("completed").sum()
         inprogress = df_main["Progress"].str.lower().eq("in progress").sum()
@@ -156,8 +168,9 @@ with tabs[1]:
                     number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
                     title={"text": title, "font": {"size": 20, "color": dial_color}},
                     gauge={
-                        "axis": {"range": [0, 100]},
+                        "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                         "bar": {"color": dial_color, "thickness": 0.3},
+                        "bgcolor": "#f7f9fb",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
@@ -175,53 +188,92 @@ with tabs[1]:
             st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
         with c4:
             st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+
+# ===================== INSTALLATIONS TAB =====================
+with tabs[1]:
+    st.subheader("🧰 Installations Overview")
+
+    if not install_df.empty:
+        # Standardize contractor names
+        install_df.columns = [c.strip().lower() for c in install_df.columns]
+        install_df = install_df.rename(columns={
+            "total number of installed": "installed",
+            "total number of sites": "sites"
+        })
+
+        # Define contractors and colors
+        contractors = ["deezlo", "nimba", "isandiso"]
+        colors = ["#1f77b4", "#ff7f0e", "#2ca02c"]
+
+        # Create gauges
+        def create_installation_gauge(installed, total, title, color):
+            value = (installed / total * 100) if total > 0 else 0
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=value,
+                number={'suffix': '%', 'font': {'size': 36, 'color': color}},
+                title={'text': f"{title}<br><span style='font-size:16px;'>({installed} / {total})</span>", 'font': {'size': 18}},
+                gauge={
+                    'axis': {'range': [0, 100]},
+                    'bar': {'color': color, 'thickness': 0.25},
+                    'bgcolor': "white",
+                    'steps': [{'range': [0, 100], 'color': '#eaf4ff'}]
+                }
+            ))
+            fig.update_layout(height=270, margin=dict(l=20, r=20, t=40, b=10))
+            return fig
+
+        c1, c2, c3 = st.columns(3)
+        for i, contractor in enumerate(contractors):
+            row = install_df[install_df.iloc[:, 0].str.lower().eq(contractor)]
+            if not row.empty:
+                installed = int(row["installed"].values[0])
+                total = int(row["sites"].values[0])
+                with [c1, c2, c3][i]:
+                    st.plotly_chart(create_installation_gauge(installed, total, contractor.capitalize(), colors[i]), use_container_width=True)
     else:
-        st.info("No task data found in workbook.")
+        st.warning("No installation data found in 'Weekly update sheet.xlsx'.")
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[2]:
-    st.subheader("📋 Task Breakdown")
-    if df_main.empty:
-        st.warning("No task data available.")
-    else:
-        st.dataframe(df_main, use_container_width=True)
+    st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
+    st.dataframe(df_main, use_container_width=True)
 
 # ===================== TIMELINE TAB =====================
 with tabs[3]:
-    st.subheader("📅 Project Timeline")
     if "Start date" in df_main.columns and "Due date" in df_main.columns:
-        df_copy = df_main.dropna(subset=["Start date", "Due date"]).copy()
-        if not df_copy.empty:
-            df_copy["Start date"] = pd.to_datetime(df_copy["Start date"], errors="coerce")
-            df_copy["Due date"] = pd.to_datetime(df_copy["Due date"], errors="coerce")
-            df_copy["Task"] = df_copy[df_main.columns[0]].astype(str)
-            progress_colors = {"Not Started": "#66b3ff", "In Progress": "#3399ff", "Completed": "#33cc33"}
-            fig = px.timeline(
-                df_copy,
+        df_copy = df_main.replace("Null", None)
+        timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
+        if not timeline.empty:
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {
+                "Not Started": "#66b3ff",
+                "In Progress": "#3399ff",
+                "Completed": "#33cc33",
+            }
+            fig_tl = px.timeline(
+                timeline,
                 x_start="Start date",
                 x_end="Due date",
-                y="Task",
+                y="task_short",
                 color="Progress",
-                color_discrete_map=progress_colors,
+                color_discrete_map=progress_color_map,
                 title="Task Timeline",
             )
-            fig.update_yaxes(autorange="reversed")
-            st.plotly_chart(fig, use_container_width=True)
+            fig_tl.update_yaxes(autorange="reversed")
+            fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
+            st.plotly_chart(fig_tl, use_container_width=True)
     else:
-        st.info("No timeline data available.")
+        st.info("Timeline data not available.")
 
 # ===================== EXPORT REPORT TAB =====================
 with tabs[4]:
     st.subheader("📄 Export Smart Meter Project Report")
-
     if not df_main.empty:
         buf = BytesIO()
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         story = []
         styles = getSampleStyleSheet()
-
-        cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
-        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey, leading=10, alignment=1)
 
         story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
@@ -233,21 +285,26 @@ with tabs[4]:
         kpi_data = [
             ["Metric", "Count"],
             ["Total Tasks", len(df_main)],
-            ["Completed", df_main["Progress"].str.lower().eq("completed").sum()],
-            ["In Progress", df_main["Progress"].str.lower().eq("in progress").sum()],
-            ["Not Started", df_main["Progress"].str.lower().eq("not started").sum()],
+            ["Completed", completed],
+            ["In Progress", inprogress],
+            ["Not Started", notstarted],
+            ["Overdue", overdue],
         ]
         table = Table(kpi_data, colWidths=[200, 100])
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#d9d9d9")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
             ("GRID", (0, 0), (-1, -1), 1, colors.grey),
             ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ]))
         story.append(table)
         story.append(Spacer(1, 20))
-
         doc.build(story)
-        st.download_button("📥 Download PDF Report", data=buf.getvalue(),
-                           file_name="Ethekwini_WS7761_SmartMeter_Report.pdf", mime="application/pdf")
+
+        st.download_button(
+            "📥 Download PDF Report",
+            data=buf.getvalue(),
+            file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+            mime="application/pdf",
+        )
     else:
         st.warning("No data found to export.")
