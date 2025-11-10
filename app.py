@@ -218,7 +218,9 @@ def load_installations(path=installations_path):
             df_inst["total number of sites"] = 0
 
         # Drop rows where contractor is blank or equals 'nan'
-        df_inst = df_inst[df_inst["Contractor"].str.strip().replace("nan", "").replace("None", "") != ""]
+        # Use safe replacement and trimming
+        df_inst["Contractor"] = df_inst["Contractor"].astype(str).str.strip()
+        df_inst = df_inst[df_inst["Contractor"].notna() & (df_inst["Contractor"].str.lower() != "nan") & (df_inst["Contractor"].str.lower() != "none") & (df_inst["Contractor"] != "")]
         df_inst = df_inst.reset_index(drop=True)
         return df_inst
     except Exception:
@@ -410,21 +412,42 @@ with tabs[3]:
     if df_installations is not None and not df_installations.empty:
         # Ensure columns exist and are numeric
         if "total number of installed" in df_installations.columns:
+            df_installations["total number of installed"] = pd.to_numeric(df_installations["total number of installed"], errors="coerce").fillna(0).astype(int)
             total_installations = int(df_installations["total number of installed"].sum())
+        else:
+            df_installations["total number of installed"] = 0
         if "total number of sites" in df_installations.columns:
+            df_installations["total number of sites"] = pd.to_numeric(df_installations["total number of sites"], errors="coerce").fillna(0).astype(int)
             total_sites = int(df_installations["total number of sites"].sum())
-        contractors_count = df_installations["Contractor"].replace("nan", "").replace("None", "").astype(str).str.strip().replace("", pd.NA).dropna().shape[0]
+        else:
+            df_installations["total number of sites"] = 0
+
+        # Clean contractor names and count
+        df_installations["Contractor"] = df_installations["Contractor"].astype(str).str.strip()
+        contractors_series = df_installations["Contractor"].replace("", pd.NA).dropna()
+        contractors_count = contractors_series.shape[0]
         if contractors_count > 0:
             avg_installed_per_contractor = round(total_installations / contractors_count, 1)
         else:
             avg_installed_per_contractor = 0
 
-        # Create absolute-style gauges for the three metrics
+        # Utility functions for gauges
+        def sensible_max(n):
+            n = max(1, int(n))
+            if n <= 10:
+                return 10
+            if n <= 100:
+                return ((n // 10) + 1) * 10
+            if n <= 1000:
+                return ((n // 50) + 1) * 50
+            return ((n // 200) + 1) * 200
+
         def create_absolute_gauge(title, value, max_value, dial_color):
-            # avoid zero-range gauge
             max_val = max(1, int(max_value))
-            # clamp value to max for display
-            disp_val = min(int(value), max_val)
+            disp_val = float(value)
+            # clamp disp_val for display (but gauges can show up to max_val)
+            if disp_val > max_val:
+                disp_val = max_val
             fig = go.Figure(
                 go.Indicator(
                     mode="gauge+number",
@@ -439,24 +462,44 @@ with tabs[3]:
                     },
                 )
             )
-            fig.update_layout(height=250, margin=dict(l=10, r=10, t=30, b=10))
+            fig.update_layout(height=220, margin=dict(l=10, r=10, t=25, b=10))
             return fig
 
-        # choose reasonable max values for gauges so they're visually meaningful
-        # max for installations = next round up to nearest 10/50 depending on magnitude
-        def sensible_max(n):
-            n = max(1, int(n))
-            if n <= 10:
-                return 10
-            if n <= 100:
-                return ((n // 10) + 1) * 10
-            if n <= 1000:
-                return ((n // 50) + 1) * 50
-            return ((n // 200) + 1) * 200
+        # --------------------
+        # Top: contractor dials (one per contractor, dynamic)
+        # --------------------
+        contractors = df_installations["Contractor"].tolist()
+        installs = df_installations["total number of installed"].tolist()
 
+        # choose a global max for contractor gauges for consistent scale
+        max_installs_all = max(installs) if installs else 1
+        max_installed_gauge = sensible_max(max_installs_all)
+
+        # determine layout: up to 4 gauges per row for readability
+        per_row = 4
+        num = len(contractors)
+        if num == 0:
+            st.info("No contractor installation rows found.")
+        else:
+            st.markdown("**Installations by Contractor**")
+            # create rows of columns
+            for start in range(0, num, per_row):
+                chunk_contrs = contractors[start:start + per_row]
+                chunk_inst = installs[start:start + per_row]
+                cols = st.columns(len(chunk_contrs))
+                for idx, (c_name, c_val) in enumerate(zip(chunk_contrs, chunk_inst)):
+                    with cols[idx]:
+                        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                        st.plotly_chart(create_absolute_gauge(c_name, c_val, max_installed_gauge, "#007acc"), use_container_width=True)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        # --------------------
+        # Bottom: three summary dials
+        # --------------------
         max_inst = sensible_max(total_installations)
         max_sites = sensible_max(total_sites)
-        max_avg = sensible_max(int(avg_installed_per_contractor))
+        max_avg = sensible_max(int(avg_installed_per_contractor) if avg_installed_per_contractor >= 1 else 1)
 
         col_a, col_b, col_c = st.columns(3)
         with col_a:
