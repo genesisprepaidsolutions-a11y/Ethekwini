@@ -1,35 +1,105 @@
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from datetime import datetime
+import os
+from io import BytesIO
+from reportlab.lib.pagesizes import A4, landscape
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+
+# ===================== PAGE CONFIGURATION =====================
+st.set_page_config(
+    page_title="eThekwini WS-7761 Smart Meter Project",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ===================== THEME =====================
+st.markdown(
+    """
+    <style>
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        color: #003366 !important;
+    }
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        color: #003366 !important;
+    }
+    [data-testid="stHeader"] {
+        background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
+        color: white !important;
+        font-weight: bold;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .metric-card {
+        background-color: #f5f9ff;
+        border-radius: 16px;
+        padding: 1rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+    }
+    [data-testid="stToolbar"], button[data-testid="baseButton-secondary"], [data-testid="stThemeToggle"] {
+        display: none !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ===================== HEADER =====================
+logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
+data_path = "Weekly update sheet.xlsx"
+
+col1, col2, col3 = st.columns([2, 6, 1])
+with col1:
+    if os.path.exists(data_path):
+        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
+    else:
+        file_date = datetime.now().strftime("%d %B %Y")
+    st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
+with col2:
+    st.markdown(
+        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project </h1>",
+        unsafe_allow_html=True,
+    )
+with col3:
+    st.image(logo_url, width=220)
+st.markdown("---")
+
+# ===================== LOAD DATA =====================
+@st.cache_data
+def load_data(path):
+    df = pd.read_excel(path)
+    df = df.fillna(0)
+    return df
+
+df_update = load_data(data_path)
+
+# ===================== TABS =====================
+tabs = st.tabs(["KPIs", "Installations", "Task Breakdown", "Timeline", "Export Report"])
+
+# ===================== KPI TAB (PLACEHOLDER) =====================
+with tabs[0]:
+    st.subheader("Key Performance Indicators")
+    st.markdown("This tab contains existing KPI dials and insights.")
+
 # ===================== INSTALLATIONS TAB =====================
 with tabs[1]:
     st.subheader("🧰 Installations Overview")
     st.markdown("Below are the installation dials for each contractor based on the latest weekly update sheet.")
 
-    # Load and clean data
+    # Extract data for dials
     df_update.set_index(df_update.columns[0], inplace=True)
-    df_update.columns = df_update.columns.str.strip().str.lower()
-    df_update.index = df_update.index.str.strip().str.lower()
-
-    # Safely extract "meters installed"
-    if "meters installed" not in df_update.index:
-        st.error("❌ The sheet doesn't contain a row named 'Meters installed'. Please verify your Excel file.")
-        st.stop()
-
-    installed = df_update.loc["meters installed"]
-
-    # Helper to safely get values
-    def safe_get(series, key):
-        for col in series.index:
-            if key.lower() in col.lower():
-                return series[col]
-        return None
-
-    contractors = ["Deezlo", "Nimba", "Isindiso"]
-    colors = ["#003366", "#007acc", "#00b386"]
+    installed = df_update.loc["Meters installed"]
 
     def create_installation_gauge(value, title, color):
         fig = go.Figure(
             go.Indicator(
                 mode="gauge+number",
-                value=value if value is not None else 0,
+                value=value,
                 title={"text": title, "font": {"size": 22, "color": color}},
                 gauge={
                     "axis": {"range": [0, 200], "tickwidth": 1, "tickcolor": "gray"},
@@ -43,16 +113,41 @@ with tabs[1]:
         fig.update_layout(height=300, margin=dict(l=15, r=15, t=40, b=20))
         return fig
 
-    # Show the dials in 1 row
+    colors = ["#003366", "#007acc", "#00b386"]
+
     c1, c2, c3 = st.columns(3)
-    for i, (contractor, col) in enumerate(zip(contractors, [c1, c2, c3])):
-        val = safe_get(installed, contractor)
-        if val is not None:
-            with col:
-                st.plotly_chart(create_installation_gauge(val, f"{contractor} Installed", colors[i]), use_container_width=True)
-        else:
-            with col:
-                st.warning(f"⚠️ {contractor} data not found in Excel.")
-    
+    with c1:
+        st.plotly_chart(create_installation_gauge(installed["Deezlo"], "Deezlo Installed", colors[0]), use_container_width=True)
+    with c2:
+        st.plotly_chart(create_installation_gauge(installed["Nimba"], "Nimba Installed", colors[1]), use_container_width=True)
+    with c3:
+        st.plotly_chart(create_installation_gauge(installed["Isindiso"], "Isindiso Installed", colors[2]), use_container_width=True)
+
     st.markdown("---")
     st.dataframe(df_update)
+
+# ===================== PLACEHOLDER TABS =====================
+with tabs[2]:
+    st.subheader("Task Breakdown")
+    st.markdown("Placeholder for task breakdown data.")
+
+with tabs[3]:
+    st.subheader("Timeline")
+    st.markdown("Placeholder for timeline visualization.")
+
+with tabs[4]:
+    st.subheader("📄 Export Smart Meter Project Report")
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
+    story = []
+    styles = getSampleStyleSheet()
+    story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+    story.append(Image(logo_url, width=120, height=70))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
+    doc.build(story)
+    st.download_button("📥 Download PDF Report", data=buf.getvalue(), file_name="Ethekwini_WS7761_SmartMeter_Report.pdf", mime="application/pdf")
+
