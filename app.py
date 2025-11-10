@@ -14,9 +14,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ==========================================
-# CUSTOM STYLING
-# ==========================================
 st.markdown("""
     <style>
         .main {
@@ -79,7 +76,7 @@ st.markdown(f"""
 # ==========================================
 # VALIDATE CONTRACTOR COLUMNS
 # ==========================================
-expected_contractors = ["Deezlo", "Nimba", "Isandiso"]
+expected_contractors = ["Deezlo", "Nimbe", "Insandiso"]
 for col in expected_contractors:
     if col not in df.columns:
         st.error(f"Missing column in Excel: **{col}** — please verify your file headers.")
