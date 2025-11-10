@@ -5,8 +5,7 @@ from datetime import datetime
 import os
 from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
-from reportlab.lib import colors
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet
 
 # ===================== PAGE CONFIGURATION =====================
@@ -75,7 +74,6 @@ def load_latest_sheet(path):
     """Load the latest (most recent date-named) sheet from Excel"""
     xls = pd.ExcelFile(path)
     sheet_names = xls.sheet_names
-    # Try to sort by date if possible
     try:
         sorted_sheets = sorted(sheet_names, key=lambda x: datetime.strptime(x, "%Y-%m-%d"), reverse=True)
         latest_sheet = sorted_sheets[0]
@@ -85,6 +83,37 @@ def load_latest_sheet(path):
     return df, latest_sheet
 
 df_installations, sheet_name = load_latest_sheet(data_path)
+
+# ===================== NORMALIZE COLUMNS =====================
+# Clean and standardize column names
+df_installations.columns = (
+    df_installations.columns.str.strip()
+    .str.lower()
+    .str.replace(r"\s+", " ", regex=True)
+)
+
+# Show available columns for debugging
+st.write("🔍 Detected columns:", list(df_installations.columns))
+
+# Try to match flexible names
+def find_col(possible_names):
+    for name in df_installations.columns:
+        for target in possible_names:
+            if target in name:
+                return name
+    return None
+
+col_contractor = find_col(["contractor"])
+col_installed = find_col(["installed"])
+col_sites = find_col(["site"])
+
+if not all([col_contractor, col_installed, col_sites]):
+    st.error("❌ Could not find expected columns. Please check your Excel headers.")
+    st.stop()
+
+# Convert to numeric safely
+df_installations[col_installed] = pd.to_numeric(df_installations[col_installed], errors="coerce").fillna(0)
+df_installations[col_sites] = pd.to_numeric(df_installations[col_sites], errors="coerce").fillna(0)
 
 # ===================== TABS =====================
 tabs = st.tabs(["KPIs", "Installations", "Task Breakdown", "Timeline", "Export Report"])
@@ -99,32 +128,26 @@ with tabs[1]:
     st.subheader(f"🧰 Installations Overview — Sheet: {sheet_name}")
     st.markdown("Below are the installation dials for each contractor based on the latest weekly update sheet.")
 
-    # Clean column names
-    df_installations.columns = [c.strip().lower() for c in df_installations.columns]
-
-    # Ensure numeric
-    df_installations["total number of installed"] = pd.to_numeric(df_installations["total number of installed"], errors="coerce").fillna(0)
-    df_installations["total number of sites"] = pd.to_numeric(df_installations["total number of sites"], errors="coerce").fillna(0)
-
     def create_installation_gauge(installed, total, contractor, color):
+        completion = (installed / total * 100) if total > 0 else 0
         fig = go.Figure(
             go.Indicator(
-                mode="gauge+number+delta",
-                value=installed,
-                delta={"reference": total, "increasing": {"color": "#ff4d4d"}},
-                title={"text": contractor, "font": {"size": 22, "color": color}},
+                mode="gauge+number",
+                value=completion,
+                title={"text": f"{contractor}<br><span style='font-size:14px'>({installed}/{int(total)})</span>",
+                       "font": {"size": 22, "color": color}},
                 gauge={
-                    "axis": {"range": [0, total], "tickwidth": 1, "tickcolor": "gray"},
+                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                     "bar": {"color": color, "thickness": 0.3},
                     "bgcolor": "#ffffff",
-                    "steps": [{"range": [0, total], "color": "#e0e0e0"}],
+                    "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     "threshold": {
                         "line": {"color": color, "width": 4},
                         "thickness": 0.8,
-                        "value": installed
+                        "value": completion
                     },
                 },
-                number={"font": {"size": 36, "color": color}},
+                number={"font": {"size": 36, "color": color}, "suffix": "%"},
             )
         )
         fig.update_layout(height=300, margin=dict(l=15, r=15, t=40, b=20))
@@ -132,23 +155,27 @@ with tabs[1]:
 
     colors = ["#003366", "#007acc", "#00b386"]
 
-    # Display 3 dials (one per contractor)
     c1, c2, c3 = st.columns(3)
-    for i, row in enumerate(df_installations.itertuples(), start=1):
-        if i == 1:
+    contractors = df_installations.to_dict("records")
+    for i, row in enumerate(contractors):
+        contractor = row[col_contractor]
+        installed = row[col_installed]
+        total = row[col_sites]
+        color = colors[i % len(colors)]
+        if i == 0:
             with c1:
-                st.plotly_chart(create_installation_gauge(row._2, row._3, row.Contractor, colors[0]), use_container_width=True)
-        elif i == 2:
+                st.plotly_chart(create_installation_gauge(installed, total, contractor, color), use_container_width=True)
+        elif i == 1:
             with c2:
-                st.plotly_chart(create_installation_gauge(row._2, row._3, row.Contractor, colors[1]), use_container_width=True)
-        elif i == 3:
+                st.plotly_chart(create_installation_gauge(installed, total, contractor, color), use_container_width=True)
+        elif i == 2:
             with c3:
-                st.plotly_chart(create_installation_gauge(row._2, row._3, row.Contractor, colors[2]), use_container_width=True)
+                st.plotly_chart(create_installation_gauge(installed, total, contractor, color), use_container_width=True)
 
     st.markdown("---")
     st.dataframe(df_installations)
 
-# ===================== PLACEHOLDER TABS =====================
+# ===================== OTHER TABS =====================
 with tabs[2]:
     st.subheader("Task Breakdown")
     st.markdown("Placeholder for task breakdown data.")
