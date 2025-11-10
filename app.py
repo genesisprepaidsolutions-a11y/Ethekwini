@@ -86,6 +86,7 @@ st.markdown(
 # ===================== HEADER WITH LOGO =====================
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 data_path = "Ethekwini WS-7761.xlsx"
+installations_path = "Weekly update sheet.xlsx"  # file to be read automatically for installations
 
 col1, col2, col3 = st.columns([2, 6, 1])
 with col1:
@@ -116,22 +117,117 @@ table_colors = {
     "Overdue": "#ffb3b3",
 }
 
-# ===================== LOAD DATA =====================
+# ===================== LOAD DATA (MAIN) =====================
 @st.cache_data
 def load_data(path=data_path):
-    xls = pd.ExcelFile(path)
-    sheets = {}
-    for s in xls.sheet_names:
-        try:
-            sheets[s] = pd.read_excel(xls, sheet_name=s)
-        except Exception:
-            sheets[s] = pd.DataFrame()
-    return sheets
+    if not os.path.exists(path):
+        return {}
+    try:
+        xls = pd.ExcelFile(path)
+        sheets = {}
+        for s in xls.sheet_names:
+            try:
+                sheets[s] = pd.read_excel(xls, sheet_name=s)
+            except Exception:
+                sheets[s] = pd.DataFrame()
+        return sheets
+    except Exception:
+        return {}
 
 sheets = load_data()
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
 
-# ===================== CLEAN DATA =====================
+# ===================== LOAD INSTALLATIONS DATA =====================
+@st.cache_data
+def load_installations(path=installations_path):
+    """
+    Attempt to read the Weekly update sheet.xlsx and extract installations information.
+    The function will try to find columns matching 'contractor', 'installed', and 'sites'
+    (case-insensitive). If not found, it will attempt to take the first sheet and look
+    for plausible columns. Returns a cleaned DataFrame with columns:
+    ['Contractor', 'total number of installed', 'total number of sites']
+    """
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=["Contractor", "total number of installed", "total number of sites"])
+
+    try:
+        xls = pd.ExcelFile(path)
+        # read first sheet by default (user provided file expected to have installations in first sheet)
+        raw = pd.read_excel(xls, sheet_name=0)
+    except Exception:
+        try:
+            raw = pd.read_excel(path)
+        except Exception:
+            return pd.DataFrame(columns=["Contractor", "total number of installed", "total number of sites"])
+
+    if raw is None or raw.empty:
+        return pd.DataFrame(columns=["Contractor", "total number of installed", "total number of sites"])
+
+    # Normalize column names
+    cols_lower = {c: c.lower().strip() for c in raw.columns}
+    # Find contractor column
+    contractor_col = None
+    installed_col = None
+    sites_col = None
+
+    for orig, low in cols_lower.items():
+        if "contractor" in low:
+            contractor_col = orig
+        if ("install" in low and "site" not in low) or "installed" in low or "total number of installed" in low:
+            installed_col = orig
+        if "site" in low and "installed" not in low:
+            sites_col = orig
+        # handle possible variations
+        if low.replace(" ", "").startswith("contractor"):
+            contractor_col = orig
+
+    # fallback heuristics
+    if contractor_col is None:
+        # try first text column
+        for c in raw.columns:
+            if raw[c].dtype == object:
+                contractor_col = c
+                break
+
+    if installed_col is None:
+        # try numeric columns - pick the numeric column with name or first numeric col
+        for c in raw.columns:
+            if pd.api.types.is_numeric_dtype(raw[c]):
+                installed_col = c
+                break
+
+    if sites_col is None:
+        # pick next numeric column different from installed_col
+        for c in raw.columns:
+            if c != installed_col and pd.api.types.is_numeric_dtype(raw[c]):
+                sites_col = c
+                break
+
+    # Build installations DataFrame robustly
+    try:
+        df_inst = pd.DataFrame()
+        df_inst["Contractor"] = raw[contractor_col].astype(str).str.strip() if contractor_col in raw.columns else raw.iloc[:, 0].astype(str).str.strip()
+        if installed_col in raw.columns:
+            df_inst["total number of installed"] = pd.to_numeric(raw[installed_col], errors="coerce").fillna(0).astype(int)
+        else:
+            # if no installed column found, set zeros
+            df_inst["total number of installed"] = 0
+        if sites_col in raw.columns:
+            df_inst["total number of sites"] = pd.to_numeric(raw[sites_col], errors="coerce").fillna(0).astype(int)
+        else:
+            df_inst["total number of sites"] = 0
+
+        # Drop rows where contractor is blank or equals 'nan'
+        df_inst = df_inst[df_inst["Contractor"].str.strip().replace("nan", "").replace("None", "") != ""]
+        df_inst = df_inst.reset_index(drop=True)
+        return df_inst
+    except Exception:
+        # On any failure, return an empty standardized DF
+        return pd.DataFrame(columns=["Contractor", "total number of installed", "total number of sites"])
+
+df_installations = load_installations()
+
+# ===================== CLEAN DATA (MAIN) =====================
 if not df_main.empty:
     for c in [col for col in df_main.columns if "date" in col.lower()]:
         df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
@@ -142,7 +238,7 @@ if not df_main.empty:
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
 # ===================== MAIN TABS =====================
-tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Export Report"])
+tabs = st.tabs(["KPIs", "Task Breakdown", "Timeline", "Installations", "Export Report"])
 
 # ===================== KPI TAB =====================
 with tabs[0]:
@@ -301,8 +397,21 @@ with tabs[2]:
     else:
         st.info("Timeline data not available.")
 
-# ===================== EXPORT REPORT TAB =====================
+# ===================== INSTALLATIONS TAB =====================
 with tabs[3]:
+    st.subheader("Installations Summary (from Weekly update sheet.xlsx)")
+    if df_installations is not None and not df_installations.empty:
+        # Display a neat styled table
+        st.table(df_installations.rename(columns={
+            "Contractor": "Contractor",
+            "total number of installed": "Total Number Installed",
+            "total number of sites": "Total Number of Sites"
+        }))
+    else:
+        st.warning(f"No installations data found in '{installations_path}'.")
+
+# ===================== EXPORT REPORT TAB =====================
+with tabs[4]:
     st.subheader("📄 Export Smart Meter Project Report")
 
     if not df_main.empty:
@@ -341,6 +450,39 @@ with tabs[3]:
         story.append(table)
         story.append(Spacer(1, 20))
 
+        # ===== Add Installations table (all contractors) to the PDF export =====
+        if df_installations is not None and not df_installations.empty:
+            story.append(Paragraph("<b>Installations Summary</b>", styles["Heading3"]))
+            story.append(Spacer(1, 8))
+            # Prepare data for PDF table
+            inst_df = df_installations.fillna("Null").replace("NaT", "Null")
+            inst_data = [list(inst_df.columns)]
+            for _, row in inst_df.iterrows():
+                wrapped_row = []
+                for cell in row:
+                    if str(cell).strip() == "Null":
+                        wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                    else:
+                        wrapped_row.append(Paragraph(str(cell), cell_style))
+                inst_data.append(wrapped_row)
+
+            col_count_inst = len(inst_df.columns)
+            inst_table = Table(inst_data, colWidths=[(A4[1] - 80) / col_count_inst] * col_count_inst, repeatRows=1)
+            inst_table.setStyle(TableStyle([
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]))
+            story.append(inst_table)
+            story.append(Spacer(1, 20))
+        else:
+            story.append(Paragraph("<b>Installations Summary</b>", styles["Heading3"]))
+            story.append(Spacer(1, 8))
+            story.append(Paragraph("No installations data available from the Weekly update sheet.", styles["Normal"]))
+            story.append(Spacer(1, 12))
+
+        # ===== Add limited tasks table (existing behavior) =====
         limited = df_main.head(15).copy()
         limited = limited.fillna("Null").replace("NaT", "Null")
 
