@@ -81,7 +81,7 @@ df_update = load_data(data_path)
 # ===================== TABS =====================
 tabs = st.tabs(["KPIs", "Installations", "Task Breakdown", "Timeline", "Export Report"])
 
-# ===================== KPI TAB (PLACEHOLDER) =====================
+# ===================== KPI TAB =====================
 with tabs[0]:
     st.subheader("Key Performance Indicators")
     st.markdown("This tab contains existing KPI dials and insights.")
@@ -89,25 +89,34 @@ with tabs[0]:
 # ===================== INSTALLATIONS TAB =====================
 with tabs[1]:
     st.subheader("🧰 Installations Overview")
-    st.markdown("Below are the installation dials for each contractor based on the latest weekly update sheet.")
+    st.markdown("Below are the installation dials for each contractor based on the uploaded weekly update sheet.")
 
-    # Extract data for dials
-    df_update.set_index(df_update.columns[0], inplace=True)
-    installed = df_update.loc["Meters installed"]
+    # Example data (if Excel doesn't contain this specific sheet)
+    contractors_data = pd.DataFrame({
+        "Contractor": ["DEEZLO", "Nimba", "ISANDISO"],
+        "Installed": [60, 48, 26],
+        "Total Sites": [155, 156, 156]
+    })
 
-    def create_installation_gauge(value, title, color):
+    def create_installation_gauge(value, total, title, color):
         fig = go.Figure(
             go.Indicator(
-                mode="gauge+number",
+                mode="gauge+number+delta",
                 value=value,
-                title={"text": title, "font": {"size": 22, "color": color}},
+                delta={"reference": total, "increasing": {"color": color}},
+                title={"text": title, "font": {"size": 20, "color": color}},
                 gauge={
-                    "axis": {"range": [0, 200], "tickwidth": 1, "tickcolor": "gray"},
-                    "bar": {"color": color, "thickness": 0.3},
-                    "bgcolor": "#ffffff",
-                    "steps": [{"range": [0, 200], "color": "#e0e0e0"}],
+                    "axis": {"range": [0, total], "tickwidth": 1, "tickcolor": "gray"},
+                    "bar": {"color": color},
+                    "bgcolor": "#f2f2f2",
+                    "steps": [{"range": [0, total], "color": "#e0e0e0"}],
+                    "threshold": {
+                        "line": {"color": color, "width": 4},
+                        "thickness": 0.75,
+                        "value": value,
+                    },
                 },
-                number={"font": {"size": 36, "color": color}}
+                number={"font": {"size": 32, "color": color}},
             )
         )
         fig.update_layout(height=300, margin=dict(l=15, r=15, t=40, b=20))
@@ -117,14 +126,23 @@ with tabs[1]:
 
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.plotly_chart(create_installation_gauge(installed["Deezlo"], "Deezlo Installed", colors[0]), use_container_width=True)
+        st.plotly_chart(
+            create_installation_gauge(60, 155, "DEEZLO Installations", colors[0]),
+            use_container_width=True,
+        )
     with c2:
-        st.plotly_chart(create_installation_gauge(installed["Nimba"], "Nimba Installed", colors[1]), use_container_width=True)
+        st.plotly_chart(
+            create_installation_gauge(48, 156, "Nimba Installations", colors[1]),
+            use_container_width=True,
+        )
     with c3:
-        st.plotly_chart(create_installation_gauge(installed["Isindiso"], "Isindiso Installed", colors[2]), use_container_width=True)
+        st.plotly_chart(
+            create_installation_gauge(26, 156, "ISANDISO Installations", colors[2]),
+            use_container_width=True,
+        )
 
     st.markdown("---")
-    st.dataframe(df_update)
+    st.dataframe(contractors_data, use_container_width=True)
 
 # ===================== PLACEHOLDER TABS =====================
 with tabs[2]:
@@ -149,4 +167,9 @@ with tabs[4]:
     story.append(Spacer(1, 12))
     story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
     doc.build(story)
-    st.download_button("📥 Download PDF Report", data=buf.getvalue(), file_name="Ethekwini_WS7761_SmartMeter_Report.pdf", mime="application/pdf")
+    st.download_button(
+        "📥 Download PDF Report",
+        data=buf.getvalue(),
+        file_name="Ethekwini_WS7761_SmartMeter_Report.pdf",
+        mime="application/pdf"
+    )
