@@ -234,8 +234,8 @@ with tabs[4]:
                       ["Not Started", notstarted],
                       ["Overdue", overdue]]
         table = Table(table_data)
-        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-                                   ("GRID", (0, 0), (-1, -1), 1, colors.grey)]))
+        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.lightgray),
+                                   ("GRID", (0, 0), (-1, -1), 1, colors.gray)]))
         story.append(table)
         story.append(Spacer(1, 20))
         doc.build(story)
