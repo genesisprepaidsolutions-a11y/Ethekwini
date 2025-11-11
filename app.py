@@ -235,7 +235,7 @@ with tabs[4]:
                       ["Overdue", overdue]]
         table = Table(table_data)
         table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgray),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.84, 0.93, 0.98)),  # Light blue header
             ("GRID", (0, 0), (-1, -1), 1, colors.grey)
         ]))
         story.append(table)
