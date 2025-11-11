@@ -139,19 +139,105 @@ def load_data(path=data_path):
             sheets[s] = pd.DataFrame()
     return sheets
 
+# ----------------------------
+# Modified: robust load_install_data to read 'Installations' sheet
+# and detect header row (because the uploaded file places labels on row 2).
+# ----------------------------
 @st.cache_data
-def load_install_data(path=install_path):
+def load_install_data(path=install_path, target_sheet_names=None):
+    """
+    Loads installation data from the Weekly update sheet.
+    - Looks for a sheet named 'Installations' (case-insensitive) first.
+    - Detects header row (row where the first cell contains 'contractor' / 'installer').
+    - Returns a cleaned DataFrame with appropriate column names.
+    """
     if not os.path.exists(path):
         return pd.DataFrame()
+
     xls = pd.ExcelFile(path)
-    # auto-detect first sheet
-    first_sheet = xls.sheet_names[0] if len(xls.sheet_names) > 0 else None
-    if first_sheet:
-        try:
-            return pd.read_excel(xls, sheet_name=first_sheet)
-        except Exception:
-            return pd.DataFrame()
-    return pd.DataFrame()
+    sheet_names = xls.sheet_names
+    # find sheet that looks like installations
+    chosen = None
+    if target_sheet_names is None:
+        # prefer exact 'Installations' if present
+        for s in sheet_names:
+            if str(s).strip().lower() == "installations":
+                chosen = s
+                break
+        if not chosen:
+            # fallback: look for any sheet name containing 'install'
+            for s in sheet_names:
+                if "install" in str(s).lower():
+                    chosen = s
+                    break
+    else:
+        for s in sheet_names:
+            if s in target_sheet_names:
+                chosen = s
+                break
+
+    if not chosen:
+        # nothing matched; return first sheet
+        chosen = sheet_names[0] if len(sheet_names) > 0 else None
+
+    if not chosen:
+        return pd.DataFrame()
+
+    # Read the sheet in as raw (no header) to detect header row
+    raw = pd.read_excel(xls, sheet_name=chosen, header=None, dtype=object)
+    # Try to find an obvious header row: where a cell (first column) contains 'contractor' or 'installer'
+    header_row_idx = None
+    for idx, row in raw.iterrows():
+        first_cell = str(row.iloc[0]).strip().lower() if pd.notna(row.iloc[0]) else ""
+        # either header label in first column OR the row contains 'contractor' in any column
+        if "contractor" in first_cell or "installer" in first_cell or "contractors" in first_cell:
+            header_row_idx = idx
+            break
+        # also check full row for header keywords
+        row_text = " ".join([str(x).lower() if pd.notna(x) else "" for x in row.tolist()])
+        if "contractor" in row_text or "installer" in row_text:
+            header_row_idx = idx
+            break
+
+    # If no header found, assume header is the first row (0)
+    if header_row_idx is None:
+        header_row_idx = 0
+
+    # Set header and parse the data below that header row
+    try:
+        df = pd.read_excel(xls, sheet_name=chosen, header=header_row_idx, dtype=object)
+    except Exception:
+        df = pd.DataFrame()
+
+    # Basic cleaning: drop empty rows/cols, normalize column names
+    if not df.empty:
+        df = df.dropna(axis=0, how="all").dropna(axis=1, how="all")
+        df.columns = [str(c).strip() for c in df.columns]
+        # Some files have the header row shifted (e.g. 'contractor' becomes 'Unnamed: 0' with value 'contractor')
+        # Normalize common column names:
+        colmap = {}
+        for c in df.columns:
+            low = c.lower()
+            if "contractor" in low or "installer" in low or "contractors" in low:
+                colmap[c] = "Contractor"
+            elif "install" in low or "installed" in low or "complete" in low or "status" in low:
+                colmap[c] = "Installed"
+            elif "site" in low or "sites" in low or "total" in low:
+                colmap[c] = "Sites"
+        if colmap:
+            df = df.rename(columns=colmap)
+        # If header was shifted and actual labels are present as first row values, attempt to fix
+        # Example: first column header is 'Unnamed: 0' but row 0 contains 'contractor'
+        # Already handled by header detection; remaining validation below.
+        # Ensure Contractor column is string
+        if "Contractor" in df.columns:
+            df["Contractor"] = df["Contractor"].astype(str).str.strip()
+        # Try to convert Sites and Installed to numeric where possible
+        for numeric_col in ["Sites", "Installed"]:
+            if numeric_col in df.columns:
+                df[numeric_col] = pd.to_numeric(df[numeric_col], errors="coerce")
+
+    return df
 
 sheets = load_data()
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
@@ -198,18 +284,27 @@ with tabs[0]:
         # detect contractor and status/install columns robustly
         contractor_col = None
         status_col = None
-        for c in df_install.columns:
-            low = str(c).lower()
-            if "contractor" in low or "contractors" in low or "installer" in low:
-                contractor_col = c
-                break
-        for c in df_install.columns:
-            low = str(c).lower()
-            if "status" in low or "install" in low or "installed" in low or "complete" in low:
-                status_col = c
-                break
+        sites_col = None
 
-        # fallback: if no explicit status column, try "progress" or "state"
+        # prefer standardized names created by load_install_data
+        if "Contractor" in df_install.columns:
+            contractor_col = "Contractor"
+        if "Installed" in df_install.columns:
+            status_col = "Installed"
+        if "Sites" in df_install.columns:
+            sites_col = "Sites"
+
+        # if still not found, heuristically find them
+        for c in df_install.columns:
+            low = str(c).lower()
+            if not contractor_col and ("contractor" in low or "installer" in low or "contractors" in low):
+                contractor_col = c
+            if not status_col and ("status" in low or "install" in low or "installed" in low or "complete" in low):
+                status_col = c
+            if not sites_col and ("site" in low or "sites" in low or "total" in low):
+                sites_col = c
+
+        # fallback: if no explicit status col, try "progress" or "state"
         if not status_col:
             for c in df_install.columns:
                 low = str(c).lower()
@@ -224,6 +319,7 @@ with tabs[0]:
                     contractor_col = c
                     break
 
+        # If sites not found, fallback to counting rows per contractor
         # Show contractor gauges if both contractor and status identified
         if contractor_col and status_col:
             st.markdown("### ⚙️ Contractor Installation Progress")
@@ -231,20 +327,38 @@ with tabs[0]:
             def is_completed(value):
                 try:
                     s = str(value).strip().lower()
-                    return s in ("completed", "complete", "installed", "yes", "done")
+                    return s in ("completed", "complete", "installed", "yes", "done") or pd.notna(pd.to_numeric(value, errors="coerce"))
                 except Exception:
                     return False
 
-            summary = (
-                df_install.assign(_is_completed=df_install[status_col].apply(is_completed))
-                .groupby(contractor_col)
-                .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
-                .reset_index()
-            )
+            # If the status column holds numeric counts (like number installed), we interpret that as Installed count
+            # Build summary depending on available columns
+            if pd.api.types.is_numeric_dtype(df_install[status_col]) or df_install[status_col].dropna().apply(lambda x: str(x).replace('.','',1).isdigit()).all():
+                # status_col already numeric installed counts
+                # need total sites: use Sites column if available, otherwise set total = installed (so pct = 100%)
+                if sites_col:
+                    summary = df_install.groupby(contractor_col).agg(
+                        Installed_Sites=(status_col, "sum"),
+                        Total_Sites=(sites_col, "sum"),
+                    ).reset_index()
+                else:
+                    summary = df_install.groupby(contractor_col).agg(
+                        Installed_Sites=(status_col, "sum"),
+                    ).reset_index()
+                    summary["Total_Sites"] = summary["Installed_Sites"]  # fallback
+                summary = summary.rename(columns={"Installed_Sites": "Completed_Sites", "Total_Sites": "Total_Sites"})
+            else:
+                # status_col is textual; interpret completed vs not completed
+                summary = (
+                    df_install.assign(_is_completed=df_install[status_col].apply(lambda v: str(v).strip().lower() in ("completed","installed","complete","yes","done")))
+                    .groupby(contractor_col)
+                    .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
+                    .reset_index()
+                )
 
             # create gauge function with original styling (matching KPI dials)
             def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
-                pct = (completed / total * 100) if total > 0 else 0
+                pct = (completed / total * 100) if total and total > 0 else 0
                 fig = go.Figure(
                     go.Indicator(
                         mode="gauge+number",
@@ -267,8 +381,8 @@ with tabs[0]:
             for i in range(0, len(records), 3):
                 cols = st.columns(3)
                 for j, rec in enumerate(records[i : i + 3]):
-                    completed = int(rec.get("Completed_Sites", 0))
-                    total = int(rec.get("Total_Sites", 0))
+                    completed = int(rec.get("Completed_Sites", 0) if rec.get("Completed_Sites", 0) is not None else 0)
+                    total = int(rec.get("Total_Sites", 0) if rec.get("Total_Sites", 0) is not None else 0)
                     pct = (completed / total * 100) if total > 0 else 0
                     if pct >= 90:
                         color = "#00b386"
