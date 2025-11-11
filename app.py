@@ -84,23 +84,22 @@ st.markdown(
 )
 
 # ===================== FILE PATHS =====================
-data_path_main = "Ethekwini WS-7761.xlsx"
-data_path_install = "Weekly update sheet.xlsx"
-
-# ===================== HEADER WITH LOGO =====================
+data_path = "Ethekwini WS-7761.xlsx"
+install_path = "Weekly update sheet.xlsx"
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 
+# ===================== HEADER WITH LOGO =====================
 col1, col2, col3 = st.columns([2, 6, 1])
 with col1:
-    if os.path.exists(data_path_main):
-        file_date = datetime.fromtimestamp(os.path.getmtime(data_path_main)).strftime("%d %B %Y")
+    if os.path.exists(data_path):
+        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
     else:
         file_date = datetime.now().strftime("%d %B %Y")
     st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
 
 with col2:
     st.markdown(
-        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project</h1>",
+        "<h1 style='text-align:center; color:#003366;'>eThekwini WS-7761 Smart Meter Project </h1>",
         unsafe_allow_html=True,
     )
 
@@ -121,7 +120,7 @@ table_colors = {
 
 # ===================== LOAD DATA =====================
 @st.cache_data
-def load_excel_data(path):
+def load_data(path=data_path):
     if not os.path.exists(path):
         return {}
     xls = pd.ExcelFile(path)
@@ -133,24 +132,39 @@ def load_excel_data(path):
             sheets[s] = pd.DataFrame()
     return sheets
 
-sheets_main = load_excel_data(data_path_main)
-sheets_install = load_excel_data(data_path_install)
+@st.cache_data
+def load_install_data(path=install_path):
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    xls = pd.ExcelFile(path)
+    # auto-detect first sheet
+    first_sheet = xls.sheet_names[0] if len(xls.sheet_names) > 0 else None
+    if first_sheet:
+        try:
+            return pd.read_excel(xls, sheet_name=first_sheet)
+        except Exception:
+            return pd.DataFrame()
+    return pd.DataFrame()
 
-df_main = sheets_main.get("Tasks", pd.DataFrame()).copy()
-df_install = next(iter(sheets_install.values()), pd.DataFrame()).copy()  # Auto-load first sheet
+sheets = load_data()
+df_main = sheets.get("Tasks", pd.DataFrame()).copy()
+df_install = load_install_data().copy()
 
 # ===================== CLEAN DATA =====================
-def clean_dataframe(df):
-    if not df.empty:
-        for c in [col for col in df.columns if "date" in col.lower()]:
-            df[c] = pd.to_datetime(df[c], dayfirst=True, errors="coerce")
-        df = df.fillna("Null").replace("NaT", "Null")
-        drop_cols = [col for col in ["Is Recurring", "Late"] if col in df.columns]
-        df = df.drop(columns=drop_cols, errors="ignore")
-    return df
+if not df_main.empty:
+    for c in [col for col in df_main.columns if "date" in col.lower()]:
+        df_main[c] = pd.to_datetime(df_main[c], dayfirst=True, errors="coerce")
 
-df_main = clean_dataframe(df_main)
-df_install = clean_dataframe(df_install)
+    df_main = df_main.fillna("Null")
+    df_main = df_main.replace("NaT", "Null")
+
+    df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
+
+if not df_install.empty:
+    for c in [col for col in df_install.columns if "date" in col.lower()]:
+        df_install[c] = pd.to_datetime(df_install[c], dayfirst=True, errors="coerce")
+    df_install = df_install.fillna("Null").replace("NaT", "Null")
+    df_install = df_install.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_install.columns], errors="ignore")
 
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["Installations", "KPIs", "Task Breakdown", "Timeline", "Export Report"])
@@ -162,54 +176,113 @@ with tabs[0]:
     if not df_install.empty:
         st.markdown(f"Total records: **{df_install.shape[0]}**")
 
-        # Detect contractor and install status columns dynamically
-        contractor_col = next((c for c in df_install.columns if "contractor" in c.lower()), None)
-        status_col = next((c for c in df_install.columns if "status" in c.lower() or "install" in c.lower()), None)
+        # detect contractor and status/install columns robustly
+        contractor_col = None
+        status_col = None
+        for c in df_install.columns:
+            low = c.lower()
+            if "contractor" in low or "contractors" in low or "installer" in low:
+                contractor_col = c
+                break
+        for c in df_install.columns:
+            low = c.lower()
+            if "status" in low or "install" in low or "installed" in low or "complete" in low:
+                status_col = c
+                break
 
+        # fallback: if no explicit status column, try "progress" or "state"
+        if not status_col:
+            for c in df_install.columns:
+                low = c.lower()
+                if "progress" in low or "state" in low:
+                    status_col = c
+                    break
+
+        # If contractor column not found, attempt to use first categorical-like column
+        if not contractor_col:
+            # choose first non-date, non-numeric column
+            for c in df_install.columns:
+                if df_install[c].dtype == object and not any(k in c.lower() for k in ["date"]):
+                    contractor_col = c
+                    break
+
+        # Show contractor gauges if both contractor and status identified
         if contractor_col and status_col:
             st.markdown("### ⚙️ Contractor Installation Progress")
+            # compute completed vs total for each contractor
+            def is_completed(value):
+                try:
+                    s = str(value).strip().lower()
+                    return s in ("completed", "complete", "installed", "yes", "done")
+                except Exception:
+                    return False
 
-            contractor_summary = (
-                df_install.groupby(contractor_col)[status_col]
-                .apply(lambda x: (x.astype(str).str.lower().eq("completed").sum(), len(x)))
+            summary = (
+                df_install.assign(_is_completed=df_install[status_col].apply(is_completed))
+                .groupby(contractor_col)
+                .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
                 .reset_index()
             )
-            contractor_summary.columns = [contractor_col, "Completed_Sites", "Total_Sites"]
 
-            # Function to make contractor gauge
-            def make_gauge(completed, total, name):
+            # create gauge function with original styling (matching KPI dials)
+            def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
                 pct = (completed / total * 100) if total > 0 else 0
-                color = "#007acc" if pct < 80 else "#00b386"
                 fig = go.Figure(
                     go.Indicator(
                         mode="gauge+number",
                         value=pct,
-                        title={"text": name, "font": {"size": 18}},
-                        number={"suffix": "%", "font": {"size": 30, "color": color}},
+                        number={"suffix": "%", "font": {"size": 30, "color": dial_color}},
+                        title={"text": f"{title}\n{completed}/{total}", "font": {"size": 16, "color": dial_color}},
                         gauge={
-                            "axis": {"range": [0, 100]},
-                            "bar": {"color": color, "thickness": 0.3},
+                            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
+                            "bar": {"color": dial_color, "thickness": 0.3},
                             "bgcolor": "#f7f9fb",
+                            "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                         },
                     )
                 )
-                fig.update_layout(height=270, margin=dict(l=10, r=10, t=40, b=10))
+                fig.update_layout(height=260, margin=dict(l=10, r=10, t=40, b=10))
                 return fig
 
-            # Display 3 dials per row
-            contractors = contractor_summary.to_dict("records")
-            for i in range(0, len(contractors), 3):
+            # display gauges: 3 per row, colors vary by pct thresholds
+            records = summary.to_dict("records")
+            for i in range(0, len(records), 3):
                 cols = st.columns(3)
-                for j, cdata in enumerate(contractors[i:i+3]):
+                for j, rec in enumerate(records[i : i + 3]):
+                    completed = int(rec.get("Completed_Sites", 0))
+                    total = int(rec.get("Total_Sites", 0))
+                    pct = (completed / total * 100) if total > 0 else 0
+                    if pct >= 90:
+                        color = "#00b386"
+                    elif pct >= 70:
+                        color = "#007acc"
+                    else:
+                        color = "#e67300"
                     with cols[j]:
-                        st.plotly_chart(
-                            make_gauge(cdata["Completed_Sites"], cdata["Total_Sites"], cdata[contractor_col]),
-                            use_container_width=True
-                        )
+                        st.plotly_chart(make_contractor_gauge(completed, total, rec[contractor_col], dial_color=color), use_container_width=True)
 
-        # Show full installation table
+        else:
+            st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
+
+        # Show the installation table (keeps original style behavior)
         st.markdown("### 🧾 Installation Data")
-        st.dataframe(df_install, use_container_width=True)
+        # reuse original df_to_html style to keep consistent visuals
+        def df_to_html_install(df):
+            html = "<table>"
+            html += "<tr>"
+            for col in df.columns:
+                html += f"<th>{col}</th>"
+            html += "</tr>"
+            for _, row in df.iterrows():
+                html += "<tr>"
+                for cell in row:
+                    cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                    html += f"<td>{cell_display}</td>"
+                html += "</tr>"
+            html += "</table>"
+            return html
+
+        st.markdown(df_to_html_install(df_install), unsafe_allow_html=True)
     else:
         st.warning("No data found in Weekly update sheet.xlsx.")
 
@@ -236,9 +309,10 @@ with tabs[1]:
                     number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
                     title={"text": title, "font": {"size": 20, "color": dial_color}},
                     gauge={
-                        "axis": {"range": [0, 100]},
+                        "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                         "bar": {"color": dial_color, "thickness": 0.3},
                         "bgcolor": "#f7f9fb",
+                        "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
             )
@@ -246,16 +320,101 @@ with tabs[1]:
             return fig
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
-        c2.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
-        c3.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
-        c4.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+
+        with st.container():
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c4:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Additional Insights (kept unchanged from original)
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            df_duration = df_main.copy().replace("Null", None)
+            df_duration["Start date"] = pd.to_datetime(df_duration["Start date"], errors="coerce")
+            df_duration["Due date"] = pd.to_datetime(df_duration["Due date"], errors="coerce")
+            df_duration["Duration"] = (df_duration["Due date"] - df_duration["Start date"]).dt.days
+            avg_duration = df_duration["Duration"].mean()
+
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration:.1f} days" if pd.notna(avg_duration) else "**⏱️ Average Task Duration:** N/A")
+
+            # Priority distribution (kept same logic & colors)
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            # Phase completion by bucket (kept same)
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
+
+            st.markdown("#### 🧭 Phase Completion Dials")
+            bucket_cols = st.columns(2)
+            for i, row in enumerate(completion_by_bucket.itertuples()):
+                with bucket_cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(row._2, 100, row._1, "#006666"),
+                        use_container_width=True,
+                    )
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[2]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
-    st.dataframe(df_main, use_container_width=True)
+
+    def df_to_html(df):
+        html = "<table>"
+        html += "<tr>"
+        for col in df.columns:
+            html += f"<th>{col}</th>"
+        html += "</tr>"
+        for _, row in df.iterrows():
+            row_color = bg_color
+            if "Progress" in df.columns and "Due date" in df.columns:
+                progress = str(row["Progress"]).lower()
+                try:
+                    due_date = pd.to_datetime(row["Due date"], errors="coerce")
+                except Exception:
+                    due_date = None
+                if pd.notna(due_date) and due_date < pd.Timestamp.today() and progress != "completed":
+                    row_color = table_colors["Overdue"]
+                elif progress == "in progress":
+                    row_color = table_colors["In Progress"]
+                elif progress == "not started":
+                    row_color = table_colors["Not Started"]
+                elif progress == "completed":
+                    row_color = table_colors["Completed"]
+            html += f"<tr style='background-color:{row_color};'>"
+            for cell in row:
+                cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
+                html += f"<td>{cell_display}</td>"
+            html += "</tr>"
+        html += "</table>"
+        return html
+
+    st.markdown(df_to_html(df_main), unsafe_allow_html=True)
 
 # ===================== TIMELINE TAB =====================
 with tabs[3]:
@@ -263,16 +422,25 @@ with tabs[3]:
         df_copy = df_main.replace("Null", None)
         timeline = df_copy.dropna(subset=["Start date", "Due date"]).copy()
         if not timeline.empty:
-            timeline["Task Short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            timeline["task_short"] = timeline[df_main.columns[0]].astype(str).str.slice(0, 60)
+            progress_color_map = {
+                "Not Started": "#66b3ff",
+                "In Progress": "#3399ff",
+                "Completed": "#33cc33",
+            }
+            timeline["Progress"] = timeline["Progress"].fillna("Not Specified")
+            timeline["color_label"] = timeline["Progress"].map(lambda x: x if x in progress_color_map else "Other")
             fig_tl = px.timeline(
                 timeline,
                 x_start="Start date",
                 x_end="Due date",
-                y="Task Short",
-                color="Progress",
+                y="task_short",
+                color="color_label",
                 title="Task Timeline",
+                color_discrete_map=progress_color_map,
             )
             fig_tl.update_yaxes(autorange="reversed")
+            fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
             st.plotly_chart(fig_tl, use_container_width=True)
     else:
         st.info("Timeline data not available.")
@@ -286,6 +454,11 @@ with tabs[4]:
         doc = SimpleDocTemplate(buf, pagesize=landscape(A4))
         story = []
         styles = getSampleStyleSheet()
+
+        cell_style = ParagraphStyle(name="CellStyle", fontSize=8, leading=10, alignment=1)
+        null_style = ParagraphStyle(name="NullStyle", fontSize=8, textColor=colors.grey,
+                                    leading=10, alignment=1, fontName="Helvetica-Oblique")
+
         story.append(Paragraph("<b>Ethekwini WS-7761 Smart Meter Project Report</b>", styles["Title"]))
         story.append(Spacer(1, 12))
         story.append(Paragraph(f"Generated on: {datetime.now().strftime('%d %B %Y, %H:%M')}", styles["Normal"]))
@@ -293,34 +466,81 @@ with tabs[4]:
         story.append(Image(logo_url, width=120, height=70))
         story.append(Spacer(1, 12))
 
-        # Include Installations
+        # KPI summary (keeps original structure)
+        kpi_data = [
+            ["Metric", "Count"],
+            ["Total Tasks", total],
+            ["Completed", completed],
+            ["In Progress", inprogress],
+            ["Not Started", notstarted],
+            ["Overdue", overdue],
+            ["Average Duration (days)", f"{avg_duration:.1f}" if pd.notna(avg_duration) else "N/A"],
+        ]
+        table = Table(kpi_data, colWidths=[200, 100])
+        table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 20))
+
+        # Include Installations (if present)
         if not df_install.empty:
             story.append(Paragraph("<b>Installations Summary</b>", styles["Heading2"]))
             story.append(Spacer(1, 6))
             install_head = df_install.head(10).fillna("Null")
-            data_i = [list(install_head.columns)] + install_head.values.tolist()
-            table_i = Table(data_i, colWidths=[(A4[1] - 80) / len(install_head.columns)] * len(install_head.columns))
+            data_i = [list(install_head.columns)]
+            for _, r in install_head.iterrows():
+                row_vals = []
+                for v in r:
+                    if str(v).strip() == "Null":
+                        row_vals.append(Paragraph("<i>Null</i>", null_style))
+                    else:
+                        row_vals.append(Paragraph(str(v), cell_style))
+                data_i.append(row_vals)
+            col_count_i = len(install_head.columns) if len(install_head.columns) > 0 else 1
+            table_i = Table(data_i, colWidths=[(A4[1] - 80) / col_count_i] * col_count_i, repeatRows=1)
             table_i.setStyle(TableStyle([
                 ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ]))
             story.append(table_i)
             story.append(Spacer(1, 12))
 
-        # Include Task Summary
+        # Include Task Summary (original)
         story.append(Paragraph("<b>Task Summary</b>", styles["Heading2"]))
-        limited = df_main.head(15).fillna("Null")
-        data = [list(limited.columns)] + limited.values.tolist()
-        table = Table(data, colWidths=[(A4[1] - 80) / len(limited.columns)] * len(limited.columns))
-        table.setStyle(TableStyle([
+        limited = df_main.head(15).copy()
+        limited = limited.fillna("Null").replace("NaT", "Null")
+
+        data = [list(limited.columns)]
+        for _, row in limited.iterrows():
+            wrapped_row = []
+            for cell in row:
+                if str(cell).strip() == "Null":
+                    wrapped_row.append(Paragraph("<i>Null</i>", null_style))
+                else:
+                    wrapped_row.append(Paragraph(str(cell), cell_style))
+            data.append(wrapped_row)
+
+        col_count = len(limited.columns) if len(limited.columns) > 0 else 1
+        task_table = Table(data, colWidths=[(A4[1] - 80) / col_count] * col_count, repeatRows=1)
+        task_table.setStyle(TableStyle([
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ]))
-        story.append(table)
+
+        story.append(task_table)
         story.append(Spacer(1, 20))
         story.append(Paragraph("Ethekwini Municipality | Automated Project Report", styles["Normal"]))
 
         doc.build(story)
+
         st.download_button(
             "📥 Download PDF Report",
             data=buf.getvalue(),
