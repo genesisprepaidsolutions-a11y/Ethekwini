@@ -10,7 +10,7 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Image, Table, TableStyle
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # ===================== PAGE CONFIGURATION =====================
 st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="wide")
@@ -184,13 +184,13 @@ with tabs[1]:
             return fig
 
         cols = st.columns(4)
-        colors_list = ["#003366", "#007acc", "#00b386", "#e67300"]
+        colors = ["#003366", "#007acc", "#00b386", "#e67300"]
         vals = [notstarted, inprogress, completed, overdue]
         labels = ["Not Started", "In Progress", "Completed", "Overdue"]
         for i in range(4):
             with cols[i]:
                 st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.plotly_chart(gauge(vals[i], total, labels[i], colors_list[i]), use_container_width=True)
+                st.plotly_chart(gauge(vals[i], total, labels[i], colors[i]), use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
 # ===================== TASK BREAKDOWN TAB =====================
@@ -234,10 +234,8 @@ with tabs[4]:
                       ["Not Started", notstarted],
                       ["Overdue", overdue]]
         table = Table(table_data)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.Color(0.84, 0.93, 0.98)),  # Light blue header
-            ("GRID", (0, 0), (-1, -1), 1, colors.grey)
-        ]))
+        table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+                                   ("GRID", (0, 0), (-1, -1), 1, colors.grey)]))
         story.append(table)
         story.append(Spacer(1, 20))
         doc.build(story)
