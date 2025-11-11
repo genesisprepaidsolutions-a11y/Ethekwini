@@ -125,9 +125,20 @@ table_colors = {
     "Overdue": "#ffb3b3",
 }
 
-# ===================== LOAD DATA =====================
+# ===================== LOAD DATA (AUTO-REFRESH ENABLED) =====================
+
+def file_last_modified(path):
+    """Return last modified timestamp of a file (used to detect changes)."""
+    return os.path.getmtime(path) if os.path.exists(path) else 0
+
+
 @st.cache_data
-def load_data(path=data_path):
+def load_data(path, last_modified):
+    """
+    Load all sheets from the Ethekwini WS-7761 workbook.
+    The function is cached by Streamlit; passing last_modified ensures
+    cache invalidation when the file timestamp changes.
+    """
     if not os.path.exists(path):
         return {}
     xls = pd.ExcelFile(path)
@@ -139,17 +150,15 @@ def load_data(path=data_path):
             sheets[s] = pd.DataFrame()
     return sheets
 
-# ----------------------------
-# Modified: robust load_install_data to read 'Installations' sheet
-# and detect header row (because the uploaded file places labels on row 2).
-# ----------------------------
+
 @st.cache_data
-def load_install_data(path=install_path, target_sheet_names=None):
+def load_install_data(path, last_modified, target_sheet_names=None):
     """
     Loads installation data from the Weekly update sheet.
     - Looks for a sheet named 'Installations' (case-insensitive) first.
     - Detects header row (row where the first cell contains 'contractor' / 'installer').
     - Returns a cleaned DataFrame with appropriate column names.
+    Passing last_modified causes cache invalidation when file changes.
     """
     if not os.path.exists(path):
         return pd.DataFrame()
@@ -213,7 +222,6 @@ def load_install_data(path=install_path, target_sheet_names=None):
     if not df.empty:
         df = df.dropna(axis=0, how="all").dropna(axis=1, how="all")
         df.columns = [str(c).strip() for c in df.columns]
-        # Some files have the header row shifted (e.g. 'contractor' becomes 'Unnamed: 0' with value 'contractor')
         # Normalize common column names:
         colmap = {}
         for c in df.columns:
@@ -226,9 +234,6 @@ def load_install_data(path=install_path, target_sheet_names=None):
                 colmap[c] = "Sites"
         if colmap:
             df = df.rename(columns=colmap)
-        # If header was shifted and actual labels are present as first row values, attempt to fix
-        # Example: first column header is 'Unnamed: 0' but row 0 contains 'contractor'
-        # Already handled by header detection; remaining validation below.
         # Ensure Contractor column is string
         if "Contractor" in df.columns:
             df["Contractor"] = df["Contractor"].astype(str).str.strip()
@@ -239,9 +244,15 @@ def load_install_data(path=install_path, target_sheet_names=None):
 
     return df
 
-sheets = load_data()
+
+# Detect file changes by timestamp
+data_last_mod = file_last_modified(data_path)
+install_last_mod = file_last_modified(install_path)
+
+# Load (and auto-reload when files change)
+sheets = load_data(data_path, data_last_mod)
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
-df_install = load_install_data().copy()
+df_install = load_install_data(install_path, install_last_mod).copy()
 
 # ===================== CLEAN DATA =====================
 if not df_main.empty:
@@ -689,3 +700,4 @@ with tabs[4]:
         )
     else:
         st.warning("No data found to export.")
+
