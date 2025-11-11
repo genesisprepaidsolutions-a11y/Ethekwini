@@ -162,27 +162,54 @@ with tabs[0]:
     if not df_install.empty:
         st.markdown(f"Total records: **{df_install.shape[0]}**")
 
-        # Display first few rows
-        st.dataframe(df_install.head(20), use_container_width=True)
+        # Detect contractor and install status columns dynamically
+        contractor_col = next((c for c in df_install.columns if "contractor" in c.lower()), None)
+        status_col = next((c for c in df_install.columns if "status" in c.lower() or "install" in c.lower()), None)
 
-        # Optional: Dial summaries if numeric columns exist
-        numeric_cols = df_install.select_dtypes(include="number").columns
-        if len(numeric_cols) >= 1:
-            st.markdown("### Installation Metrics")
-            cols = st.columns(min(3, len(numeric_cols)))
-            for i, col in enumerate(numeric_cols[:3]):
-                val = df_install[col].sum()
+        if contractor_col and status_col:
+            st.markdown("### ⚙️ Contractor Installation Progress")
+
+            contractor_summary = (
+                df_install.groupby(contractor_col)[status_col]
+                .apply(lambda x: (x.astype(str).str.lower().eq("completed").sum(), len(x)))
+                .reset_index()
+            )
+            contractor_summary.columns = [contractor_col, "Completed_Sites", "Total_Sites"]
+
+            # Function to make contractor gauge
+            def make_gauge(completed, total, name):
+                pct = (completed / total * 100) if total > 0 else 0
+                color = "#007acc" if pct < 80 else "#00b386"
                 fig = go.Figure(
                     go.Indicator(
-                        mode="number",
-                        value=val,
-                        title={"text": col},
-                        number={"font": {"size": 36, "color": "#007acc"}},
+                        mode="gauge+number",
+                        value=pct,
+                        title={"text": name, "font": {"size": 18}},
+                        number={"suffix": "%", "font": {"size": 30, "color": color}},
+                        gauge={
+                            "axis": {"range": [0, 100]},
+                            "bar": {"color": color, "thickness": 0.3},
+                            "bgcolor": "#f7f9fb",
+                        },
                     )
                 )
-                fig.update_layout(height=200, margin=dict(l=20, r=20, t=40, b=10))
-                with cols[i]:
-                    st.plotly_chart(fig, use_container_width=True)
+                fig.update_layout(height=270, margin=dict(l=10, r=10, t=40, b=10))
+                return fig
+
+            # Display 3 dials per row
+            contractors = contractor_summary.to_dict("records")
+            for i in range(0, len(contractors), 3):
+                cols = st.columns(3)
+                for j, cdata in enumerate(contractors[i:i+3]):
+                    with cols[j]:
+                        st.plotly_chart(
+                            make_gauge(cdata["Completed_Sites"], cdata["Total_Sites"], cdata[contractor_col]),
+                            use_container_width=True
+                        )
+
+        # Show full installation table
+        st.markdown("### 🧾 Installation Data")
+        st.dataframe(df_install, use_container_width=True)
     else:
         st.warning("No data found in Weekly update sheet.xlsx.")
 
@@ -228,15 +255,7 @@ with tabs[1]:
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[2]:
     st.subheader(f"Task Overview ({df_main.shape[0]} rows)")
-
-    def df_to_html(df):
-        html = "<table><tr>" + "".join([f"<th>{c}</th>" for c in df.columns]) + "</tr>"
-        for _, row in df.iterrows():
-            html += "<tr>" + "".join([f"<td>{'' if v=='Null' else v}</td>" for v in row]) + "</tr>"
-        html += "</table>"
-        return html
-
-    st.markdown(df_to_html(df_main), unsafe_allow_html=True)
+    st.dataframe(df_main, use_container_width=True)
 
 # ===================== TIMELINE TAB =====================
 with tabs[3]:
