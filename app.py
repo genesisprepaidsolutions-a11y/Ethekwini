@@ -190,10 +190,10 @@ tabs = st.tabs(["Installations", "KPIs", "Task Breakdown", "Timeline", "Export R
 
 # ===================== INSTALLATIONS TAB =====================
 with tabs[0]:
-    st.subheader("📦 Installations Summary")
+    st.subheader("📦 Installations Status")
 
     if not df_install.empty:
-        st.markdown(f"Total records: **{df_install.shape[0]}**")
+        st.markdown(f"Total Contractors: **{df_install.shape[0]}**")
 
         # detect contractor and status/install columns robustly
         contractor_col = None
