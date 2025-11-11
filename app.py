@@ -462,7 +462,7 @@ with tabs[1]:
                     },
                 )
             )
-            fig.update_layout(height=140, margin=dict(l=15, r=15, t=40, b=20))
+            fig.update_layout(height=200, margin=dict(l=15, r=15, t=40, b=20))
             return fig
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
