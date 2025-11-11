@@ -384,7 +384,7 @@ with tabs[0]:
                         },
                     )
                 )
-                fig.update_layout(height=150, margin=dict(l=10, r=10, t=40, b=10))
+                fig.update_layout(height=200, margin=dict(l=10, r=10, t=40, b=10))
                 return fig
 
             # display gauges: 3 per row, colors vary by pct thresholds
