@@ -353,34 +353,23 @@ with tabs[0]:
                 )
 
             def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
-    
-    pct = (completed / total * 100) if total and total > 0 else 0
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=pct,
-            number={"suffix": "%", "font": {"size": 26, "color": dial_color}},
-            title={"text": title, "font": {"size": 14, "color": dial_color}},
-            gauge={
-                "axis": {
-                    "range": [0, 100],
-                    "tickmode": "array",
-                    "tickvals": [0, 50, 100],
-                    "ticktext": ["0", "50", "100"],
-                    "tickfont": {"size": 10}
-                },
-                "bar": {"color": dial_color, "thickness": 0.25},
-                "bgcolor": "#f7f9fb",
-                "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
-            },
-        )
-    )
-    fig.update_layout(
-        height=160,
-        margin=dict(l=5, r=5, t=30, b=0),
-        autosize=True
-    )
-    return fig
+                pct = (completed / total * 100) if total and total > 0 else 0
+                fig = go.Figure(
+                    go.Indicator(
+                        mode="gauge+number",
+                        value=pct,
+                        number={"suffix": "%", "font": {"size": 30, "color": dial_color}},
+                        title={"text": title, "font": {"size": 16, "color": dial_color}},
+                        gauge={
+                            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
+                            "bar": {"color": dial_color, "thickness": 0.3},
+                            "bgcolor": "#f7f9fb",
+                            "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
+                        },
+                    )
+                )
+                fig.update_layout(autosize=True, margin=dict(l=10, r=10, t=40, b=10))
+                return fig
 
             records = summary.to_dict("records")
             # render gauges in rows of up to 3; handle rows with fewer items gracefully
@@ -445,34 +434,23 @@ with tabs[1]:
         ).sum()
 
         def create_colored_gauge(value, total, title, dial_color):
-    
-    pct = (value / total * 100) if total > 0 else 0
-    fig = go.Figure(
-        go.Indicator(
-            mode="gauge+number",
-            value=pct,
-            number={"suffix": "%", "font": {"size": 26, "color": dial_color}},
-            title={"text": title, "font": {"size": 14, "color": dial_color}},
-            gauge={
-                "axis": {
-                    "range": [0, 100],
-                    "tickmode": "array",
-                    "tickvals": [0, 50, 100],
-                    "ticktext": ["0", "50", "100"],
-                    "tickfont": {"size": 10}
-                },
-                "bar": {"color": dial_color, "thickness": 0.25},
-                "bgcolor": "#f7f9fb",
-                "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
-            },
-        )
-    )
-    fig.update_layout(
-        height=160,
-        margin=dict(l=5, r=5, t=30, b=0),
-        autosize=True
-    )
-    return fig
+            pct = (value / total * 100) if total > 0 else 0
+            fig = go.Figure(
+                go.Indicator(
+                    mode="gauge+number",
+                    value=pct,
+                    number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
+                    title={"text": title, "font": {"size": 20, "color": dial_color}},
+                    gauge={
+                        "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
+                        "bar": {"color": dial_color, "thickness": 0.3},
+                        "bgcolor": "#f7f9fb",
+                        "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
+                    },
+                )
+            )
+            fig.update_layout(autosize=True, margin=dict(l=15, r=15, t=40, b=20))
+            return fig
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
