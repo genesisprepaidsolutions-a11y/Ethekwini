@@ -17,109 +17,59 @@ st.set_page_config(page_title="eThekwini WS-7761 Smart Meter Project", layout="w
 st.markdown(
     """
     <style>
-    body {
-        background-color: #f7f9fb;
-        font-family: 'Segoe UI', sans-serif;
-        color: #003366;
-    }
-    [data-testid="stAppViewContainer"] {
-        background-color: #f7f9fb;
-        padding: 1rem 2rem;
-    }
-    [data-testid="stHeader"] {
-        background: linear-gradient(90deg, #007acc 0%, #00b4d8 100%);
-        color: white;
-        font-weight: bold;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-    }
-    h1, h2, h3 {
-        color: #003366 !important;
-        font-weight: 600;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #eaf4ff;
-        border-radius: 10px;
-        padding: 10px 16px;
-        color: #003366;
-        font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #007acc !important;
-        color: white !important;
-    }
-    div[data-testid="stMarkdownContainer"] {
-        color: #003366;
-    }
-    .metric-card {
-        background-color: #eaf4ff;
-        border-radius: 16px;
-        padding: 1rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
-    }
-    .dial-label {
-        text-align: center;
-        font-weight: 500;
-        color: #003366;
-        margin-top: -10px;
-        margin-bottom: 20px;
-    }
-    table {
-        border-collapse: collapse;
-        width: 100%;
-        border-radius: 10px;
-        overflow: hidden;
-    }
-    th {
-        background-color: #007acc;
-        color: white !important;
-        text-align: center;
-        padding: 8px;
-    }
-    td {
-        padding: 6px;
-        text-align: center;
-    }
-    tr:nth-child(even) {background-color: #f0f6fb;}
-    tr:hover {background-color: #d6ecff;}
-    </style>
-    
-
     /* Responsive grid for gauges and metric cards */
     .responsive-grid {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 20px;
+        gap: 16px;
         justify-items: center;
         align-items: start;
         width: 100%;
         margin-top: 0.5rem;
         margin-bottom: 0.5rem;
     }
+
     @media (max-width: 1200px) {
         .responsive-grid {
             grid-template-columns: repeat(2, 1fr);
         }
     }
+
     @media (max-width: 768px) {
         .responsive-grid {
             grid-template-columns: repeat(1, 1fr);
         }
     }
+
     .grid-item {
         width: 100%;
         min-width: 180px;
     }
-    /* make Plotly charts respect container sizing */
-    .grid-item .js-plotly-plot, .grid-item .plotly-graph-div {
+
+    /* Make Plotly charts respect container sizing and avoid cutoff */
+    .grid-item .js-plotly-plot,
+    .grid-item .plotly-graph-div {
         width: 100% !important;
-        height: auto !important;
+        height: 220px !important;  /* slightly taller for labels */
+        margin: 0 auto !important;
     }
-    .metric-card { padding: 0.75rem; }
-""",
+
+    /* Metric card styling */
+    .metric-card {
+        padding: 0.5rem 0.75rem;
+        box-sizing: border-box;
+    }
+
+    /* Optional: center dial labels below gauges */
+    .dial-label {
+        text-align: center;
+        font-weight: 500;
+        color: #003366;
+        margin-top: 5px;
+        margin-bottom: 5px;
+    }
+    </style>
+    """,
     unsafe_allow_html=True,
 )
 
