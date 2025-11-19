@@ -132,7 +132,7 @@ with col2:
 with col3:
     # use responsive image sizing
     try:
-        st.image(logo_url, use_column_width=True)
+       st.image("ethekwini_logo.png", width=200)
     except Exception:
         # fallback to a small placeholder text
         st.markdown("<div style='text-align:center;'><b>eThekwini</b></div>", unsafe_allow_html=True)
