@@ -499,7 +499,7 @@ with tabs[1]:
                 for i, row in enumerate(completion_by_bucket.itertuples(index=False)):
                     bucket_name = row[0]
                     bucket_pct = row[1]
-                    with bucket_cols[i % 2]:
+                    with bucket_cols[i % 1]:
                         st.plotly_chart(
                             create_colored_gauge(bucket_pct, 100, bucket_name, "#006666"),
                             use_container_width=True,
