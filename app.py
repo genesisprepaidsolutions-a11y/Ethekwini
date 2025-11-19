@@ -306,79 +306,93 @@ with tabs[0]:
                     status_col = c
                     break
 
-        # Show contractor gauges if both contractor and status identified
-        if contractor_col and status_col:
-            st.markdown("### ⚙️ Contractor Installation Progress")
+      # ===================== CONTRACTOR INSTALLATION GAUGES =====================
+if contractor_col and status_col and not df_install.empty:
+    st.markdown("### ⚙️ Contractor Installation Progress")
 
-            def is_completed(value):
-                try:
-                    s = str(value).strip().lower()
-                    return s in ("completed", "complete", "installed", "yes", "done") or pd.notna(pd.to_numeric(value, errors="coerce"))
-                except Exception:
-                    return False
+    # Determine completed/total
+    def is_completed(value):
+        try:
+            s = str(value).strip().lower()
+            return s in ("completed", "complete", "installed", "yes", "done") or pd.notna(pd.to_numeric(value, errors="coerce"))
+        except Exception:
+            return False
 
-            if pd.api.types.is_numeric_dtype(df_install[status_col]) or df_install[status_col].dropna().apply(lambda x: str(x).replace('.', '', 1).isdigit()).all():
-                if sites_col:
-                    summary = df_install.groupby(contractor_col).agg(
-                        Installed_Sites=(status_col, "sum"),
-                        Total_Sites=(sites_col, "sum"),
-                    ).reset_index()
-                else:
-                    summary = df_install.groupby(contractor_col).agg(
-                        Installed_Sites=(status_col, "sum"),
-                    ).reset_index()
-                    summary["Total_Sites"] = summary["Installed_Sites"]  # fallback
-                summary = summary.rename(columns={"Installed_Sites": "Completed_Sites", "Total_Sites": "Total_Sites"})
-            else:
-                summary = (
-                    df_install.assign(_is_completed=df_install[status_col].apply(lambda v: str(v).strip().lower() in ("completed","installed","complete","yes","done")))
-                    .groupby(contractor_col)
-                    .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
-                    .reset_index()
-                )
+    # Build summary depending on numeric/text status
+    if pd.api.types.is_numeric_dtype(df_install[status_col]) or df_install[status_col].dropna().apply(lambda x: str(x).replace('.','',1).isdigit()).all():
+        # Numeric status column
+        if sites_col:
+            summary = df_install.groupby(contractor_col).agg(
+                Completed_Sites=(status_col, "sum"),
+                Total_Sites=(sites_col, "sum")
+            ).reset_index()
+        else:
+            summary = df_install.groupby(contractor_col).agg(
+                Completed_Sites=(status_col, "sum")
+            ).reset_index()
+            summary["Total_Sites"] = summary["Completed_Sites"]
+    else:
+        # Text status column
+        summary = (
+            df_install.assign(_is_completed=df_install[status_col].apply(lambda v: str(v).strip().lower() in ("completed","installed","complete","yes","done")))
+            .groupby(contractor_col)
+            .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
+            .reset_index()
+        )
 
-            def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
-                pct = (completed / total * 100) if total and total > 0 else 0
-                fig = go.Figure(
-                    go.Indicator(
-                        mode="gauge+number",
-                        value=pct,
-                        number={"suffix": "%", "font": {"size": 30, "color": dial_color}},
-                        title={"text": title, "font": {"size": 16, "color": dial_color}},
-                        gauge={
-                            "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                            "bar": {"color": dial_color, "thickness": 0.3},
-                            "bgcolor": "#f7f9fb",
-                            "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
-                        },
-                    )
-                )
-                fig.update_layout(height=200, margin=dict(l=10, r=10, t=40, b=10))
-                return fig
+    # -------------------- Plotly gauge function --------------------
+    def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
+        pct = (completed / total * 100) if total > 0 else 0
+        fig = go.Figure(
+            go.Indicator(
+                mode="gauge+number",
+                value=pct,
+                number={"suffix": "%", "font": {"size": 28, "color": dial_color}, "align": "center"},
+                title={"text": title, "font": {"size": 16, "color": dial_color}},
+                gauge={
+                    "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
+                    "bar": {"color": dial_color, "thickness": 0.3},
+                    "bgcolor": "#f7f9fb",
+                    "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
+                },
+            )
+        )
+        fig.update_layout(
+            height=220,
+            margin=dict(l=10, r=10, t=40, b=20),
+            autosize=True
+        )
+        return fig
 
-            records = summary.to_dict("records")
-            st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
-            for rec in records:
-                try:
-                    completed = int(rec.get("Completed_Sites", 0))
-                except Exception:
-                    completed = 0
-                try:
-                    total = int(rec.get("Total_Sites", 0))
-                except Exception:
-                    total = 0
-                pct = (completed / total * 100) if total > 0 else 0
-                if pct >= 90:
-                    color = "#00b386"
-                elif pct >= 70:
-                    color = "#007acc"
-                else:
-                    color = "#e67300"
-                st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
-                st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True)
-                st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
-                st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+    # -------------------- Display gauges in responsive grid --------------------
+    st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
+    for rec in summary.to_dict("records"):
+        try:
+            completed = int(rec.get("Completed_Sites", 0) or 0)
+        except Exception:
+            completed = 0
+        try:
+            total = int(rec.get("Total_Sites", 0) or 0)
+        except Exception:
+            total = 0
+        pct = (completed / total * 100) if total > 0 else 0
+
+        # Color thresholds
+        if pct >= 90:
+            color = "#00b386"  # green
+        elif pct >= 70:
+            color = "#007acc"  # blue
+        else:
+            color = "#e67300"  # orange
+
+        st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
+        st.plotly_chart(
+            make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color),
+            use_container_width=True
+        )
+        st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     else:
         st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
