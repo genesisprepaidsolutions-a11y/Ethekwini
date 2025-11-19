@@ -495,7 +495,7 @@ with tabs[1]:
                 )
 
                 st.markdown("#### 🧭 Phase Completion Dials")
-                bucket_cols = st.columns(2)
+                bucket_cols = st.columns(1)
                 for i, row in enumerate(completion_by_bucket.itertuples(index=False)):
                     bucket_name = row[0]
                     bucket_pct = row[1]
