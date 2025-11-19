@@ -501,8 +501,8 @@ with tabs[1]:
                     bucket_pct = row[1]
                     with bucket_cols[i % 1]:
                         st.plotly_chart(
-                            create_colored_gauge(bucket_pct, 100, bucket_name, "#006666"),
-                            use_container_width=false,
+                            create_colored_gauge(bucket_pct, 50, bucket_name, "#006666"),
+                            use_container_width=true,
                         )
 
 # ===================== TASK BREAKDOWN TAB =====================
