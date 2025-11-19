@@ -86,7 +86,40 @@ st.markdown(
     tr:nth-child(even) {background-color: #f0f6fb;}
     tr:hover {background-color: #d6ecff;}
     </style>
-    """,
+    
+
+    /* Responsive grid for gauges and metric cards */
+    .responsive-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        justify-items: center;
+        align-items: start;
+        width: 100%;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    @media (max-width: 1200px) {
+        .responsive-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 768px) {
+        .responsive-grid {
+            grid-template-columns: repeat(1, 1fr);
+        }
+    }
+    .grid-item {
+        width: 100%;
+        min-width: 180px;
+    }
+    /* make Plotly charts respect container sizing */
+    .grid-item .js-plotly-plot, .grid-item .plotly-graph-div {
+        width: 100% !important;
+        height: auto !important;
+    }
+    .metric-card { padding: 0.75rem; }
+""",
     unsafe_allow_html=True,
 )
 
@@ -389,25 +422,30 @@ with tabs[0]:
 
             # display gauges: 3 per row, colors vary by pct thresholds
             records = summary.to_dict("records")
-            for i in range(0, len(records), 3):
-                cols = st.columns(3)
-                for j, rec in enumerate(records[i : i + 3]):
+            # Responsive grid display for contractor gauges
+            st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
+            for rec in records:
+                try:
                     completed = int(rec.get("Completed_Sites", 0) if rec.get("Completed_Sites", 0) is not None else 0)
+                except Exception:
+                    completed = 0
+                try:
                     total = int(rec.get("Total_Sites", 0) if rec.get("Total_Sites", 0) is not None else 0)
-                    pct = (completed / total * 100) if total > 0 else 0
-                    if pct >= 90:
-                        color = "#00b386"
-                    elif pct >= 70:
-                        color = "#007acc"
-                    else:
-                        color = "#e67300"
-                    with cols[j]:
-                        st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                        st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True)
-                        # numeric label under the dial
-                        st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
-                        st.markdown("</div>", unsafe_allow_html=True)
-        else:
+                except Exception:
+                    total = 0
+                pct = (completed / total * 100) if total > 0 else 0
+                if pct >= 90:
+                    color = "#00b386"
+                elif pct >= 70:
+                    color = "#007acc"
+                else:
+                    color = "#e67300"
+                st.markdown(\"<div class='grid-item metric-card'>\", unsafe_allow_html=True)
+                st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True)
+                st.markdown(f\"<div class='dial-label'>{completed} / {total} installs</div>\", unsafe_allow_html=True)
+                st.markdown(\"</div>\", unsafe_allow_html=True)
+            st.markdown(\"</div>\", unsafe_allow_html=True)
+    else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
 
         # Show the installation table (keeps original style behavior)
@@ -468,12 +506,21 @@ with tabs[1]:
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         with st.container():
-            c1, c2, c3, c4 = st.columns(4)
-            with c1:
-                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+            # Responsive KPI grid (auto-wraps to 3/2/1 columns depending on screen width)
+            st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
+            # Build KPI items
+            kpi_items = [
+                (notstarted, total, "Not Started", dial_colors[0]),
+                (inprogress, total, "In Progress", dial_colors[1]),
+                (completed, total, "Completed", dial_colors[2]),
+                (overdue, total, "Overdue", dial_colors[3]),
+            ]
+            for val, tot, title, color in kpi_items:
+                st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(val, tot, title, color), use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
-            with c2:
+            st.markdown("</div>", unsafe_allow_html=True)
+    with c2:
                 st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
                 st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
                 st.markdown("</div>", unsafe_allow_html=True)
@@ -500,12 +547,14 @@ with tabs[1]:
             # Priority distribution (kept same logic & colors)
             priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
             st.markdown("#### 🔰 Priority Distribution")
-            cols = st.columns(2)
+            st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
             priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
             for i, (priority, pct) in enumerate(priority_counts.items()):
-                with cols[i % 2]:
-                    st.plotly_chart(
-                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+    ]),
                         use_container_width=True,
                     )
 
@@ -700,5 +749,4 @@ with tabs[4]:
         )
     else:
         st.warning("No data found to export.")
-
 
