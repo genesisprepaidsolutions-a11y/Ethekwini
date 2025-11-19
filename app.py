@@ -437,18 +437,67 @@ with tabs[1]:
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
-        st.markdown("<div class='responsive-grid'>", unsafe_allow_html=True)
-        kpi_items = [
-            (notstarted, total, "Not Started", dial_colors[0]),
-            (inprogress, total, "In Progress", dial_colors[1]),
-            (completed, total, "Completed", dial_colors[2]),
-            (overdue, total, "Overdue", dial_colors[3]),
-        ]
-        for val, tot, title, color in kpi_items:
-            st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
-            st.plotly_chart(create_colored_gauge(val, tot, title, color), use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        with st.container():
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(notstarted, total, "Not Started", dial_colors[0]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c2:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(inprogress, total, "In Progress", dial_colors[1]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c3:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(completed, total, "Completed", dial_colors[2]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            with c4:
+                st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                st.plotly_chart(create_colored_gauge(overdue, total, "Overdue", dial_colors[3]), use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # Additional Insights (kept unchanged from original)
+        with st.expander("📈 Additional Insights", expanded=True):
+            st.markdown("### Expanded Project Insights")
+            df_duration2 = df_main.copy().replace("Null", None)
+            df_duration2["Start date"] = pd.to_datetime(df_duration2["Start date"], errors="coerce")
+            df_duration2["Due date"] = pd.to_datetime(df_duration2["Due date"], errors="coerce")
+            df_duration2["Duration"] = (df_duration2["Due date"] - df_duration2["Start date"]).dt.days
+            avg_duration_local = df_duration2["Duration"].mean()
+
+            st.markdown(f"**⏱️ Average Task Duration:** {avg_duration_local:.1f} days" if pd.notna(avg_duration_local) else "**⏱️ Average Task Duration:** N/A")
+
+            # Priority distribution (kept same logic & colors)
+            priority_counts = df_main["Priority"].value_counts(normalize=True) * 100
+            st.markdown("#### 🔰 Priority Distribution")
+            cols = st.columns(2)
+            priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
+            for i, (priority, pct) in enumerate(priority_counts.items()):
+                with cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
+                        use_container_width=True,
+                    )
+
+            # Phase completion by bucket (use safe indexing on itertuples)
+            completion_by_bucket = (
+                df_main.groupby("Bucket Name")["Progress"]
+                .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                .reset_index()
+                .rename(columns={"Progress": "Completion %"})
+            )
+
+            st.markdown("#### 🧭 Phase Completion Dials")
+            bucket_cols = st.columns(2)
+            for i, row in enumerate(completion_by_bucket.itertuples(index=False)):
+                # row[0] = Bucket Name, row[1] = Completion %
+                bucket_name = row[0]
+                bucket_pct = row[1]
+                with bucket_cols[i % 2]:
+                    st.plotly_chart(
+                        create_colored_gauge(bucket_pct, 100, bucket_name, "#006666"),
+                        use_container_width=True,
+                    )
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[2]:
