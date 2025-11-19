@@ -353,6 +353,7 @@ with tabs[0]:
                 )
 
             def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
+    
     pct = (completed / total * 100) if total and total > 0 else 0
     fig = go.Figure(
         go.Indicator(
@@ -444,6 +445,7 @@ with tabs[1]:
         ).sum()
 
         def create_colored_gauge(value, total, title, dial_color):
+    
     pct = (value / total * 100) if total > 0 else 0
     fig = go.Figure(
         go.Indicator(
