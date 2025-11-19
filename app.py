@@ -443,8 +443,8 @@ with tabs[0]:
                 st.markdown("<div class='grid-item metric-card'>", unsafe_allow_html=True)
                 st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True)
                 st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
-                st.markdown(\"</div>\", unsafe_allow_html=True)
-            st.markdown(\"</div>\", unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
     else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
 
