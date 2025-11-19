@@ -89,6 +89,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
 # ===================== INSTALLATIONS TAB =====================
 with tabs[0]:
     st.subheader("📦 Installations Status")
