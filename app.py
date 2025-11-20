@@ -114,27 +114,41 @@ install_path = "Weekly update sheet.xlsx"
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 
 # ===================== HEADER WITH LOGO (RESPONSIVE) =====================
-# Use balanced column ratios that behave better on small screens
+# Now using 3 columns: Left = Deezlo Logo, Middle = Title, Right = eThekwini Logo
+
 col1, col2, col3 = st.columns([1, 3, 1])
+
 with col1:
+    # LEFT LOGO (Deezlo)
+    try:
+        st.image("Deezlo.png", width=120)
+    except Exception:
+        st.markdown("<div style='text-align:center;'><b>Deezlo</b></div>", unsafe_allow_html=True)
+
+with col2:
+    # TITLE (Center) + Data Date
     if os.path.exists(data_path):
         file_date = datetime.fromtimestamp(os.path.getctime(data_path)).strftime("%d %B %Y")
     else:
         file_date = datetime.now().strftime("%d %B %Y")
-    st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
 
-with col2:
     st.markdown(
-        "<h1 style='text-align:center; color:#003366; margin:6px 0;'>eThekwini WS-7761 Smart Meter Project </h1>",
+        "<h1 style='text-align:center; color:#003366; margin:6px 0;'>"
+        "eThekwini WS-7761 Smart Meter Project"
+        "</h1>",
         unsafe_allow_html=True,
     )
 
+    st.markdown(
+        f"<div style='text-align:center; font-size:16px;'><b>📅 Data as of:</b> {file_date}</div>",
+        unsafe_allow_html=True
+    )
+
 with col3:
-    # use responsive image sizing
+    # RIGHT LOGO (eThekwini)
     try:
-       st.image("ethekwini_logo.png", width=200)
+        st.image("ethekwini_logo.png", width=150)
     except Exception:
-        # fallback to a small placeholder text
         st.markdown("<div style='text-align:center;'><b>eThekwini</b></div>", unsafe_allow_html=True)
 
 st.markdown("---")
