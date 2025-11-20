@@ -118,7 +118,7 @@ logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/
 col1, col2, col3 = st.columns([1, 3, 1])
 with col1:
     if os.path.exists(data_path):
-        file_date = datetime.fromtimestamp(os.path.getmtime(data_path)).strftime("%d %B %Y")
+        file_date = datetime.fromtimestamp(os.path.getctime(data_path)).strftime("%d %B %Y")
     else:
         file_date = datetime.now().strftime("%d %B %Y")
     st.markdown(f"<div class='metric-card'><b>📅 Data as of:</b> {file_date}</div>", unsafe_allow_html=True)
