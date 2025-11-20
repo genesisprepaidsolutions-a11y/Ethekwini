@@ -121,7 +121,7 @@ col1, col2, col3 = st.columns([1, 3, 1])
 with col1:
     # LEFT LOGO (Deezlo)
     try:
-        st.image("Deezlo.png", width=200)
+        st.image("Deezlo.png", width=300)
     except Exception:
         st.markdown("<div style='text-align:center;'><b>Deezlo</b></div>", unsafe_allow_html=True)
 
