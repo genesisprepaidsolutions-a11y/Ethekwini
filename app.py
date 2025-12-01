@@ -114,19 +114,15 @@ install_path = "Weekly update sheet.xlsx"
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 
 # ===================== HEADER WITH LOGO (RESPONSIVE) =====================
-# Now using 3 columns: Left = Deezlo Logo, Middle = Title, Right = eThekwini Logo
-
 col1, col2, col3 = st.columns([1, 3, 1])
 
 with col1:
-    # LEFT LOGO (Deezlo)
     try:
         st.image("Deezlo.png", width=400)
     except Exception:
         st.markdown("<div style='text-align:center;'><b>Deezlo</b></div>", unsafe_allow_html=True)
 
 with col2:
-    # TITLE (Center) + Data Date
     if os.path.exists(data_path):
         file_date = datetime.fromtimestamp(os.path.getctime(data_path)).strftime("%d %B %Y")
     else:
@@ -145,7 +141,6 @@ with col2:
     )
 
 with col3:
-    # RIGHT LOGO (eThekwini)
     try:
         st.image("ethekwini_logo.png", width=150)
     except Exception:
@@ -166,7 +161,6 @@ table_colors = {
 # ===================== LOAD DATA (AUTO-REFRESH ENABLED) =====================
 
 def file_last_modified(path):
-    """Return last modified timestamp of a file (used to detect changes)."""
     return os.path.getmtime(path) if os.path.exists(path) else 0
 
 
@@ -186,13 +180,25 @@ def load_data(path, last_modified):
 
 @st.cache_data
 def load_install_data(path, last_modified, target_sheet_names=None):
+    """
+    Load an 'installations' style sheet. If target_sheet_names provided, prefer the first match.
+    """
     if not os.path.exists(path):
         return pd.DataFrame()
 
     xls = pd.ExcelFile(path)
     sheet_names = xls.sheet_names
     chosen = None
-    if target_sheet_names is None:
+    if target_sheet_names:
+        # attempt to find a match case-insensitive
+        target_lowers = [str(t).strip().lower() for t in target_sheet_names]
+        for s in sheet_names:
+            if str(s).strip().lower() in target_lowers:
+                chosen = s
+                break
+
+    if not chosen:
+        # fallback to first sheet named like 'install'
         for s in sheet_names:
             if str(s).strip().lower() == "installations":
                 chosen = s
@@ -202,11 +208,6 @@ def load_install_data(path, last_modified, target_sheet_names=None):
                 if "install" in str(s).lower():
                     chosen = s
                     break
-    else:
-        for s in sheet_names:
-            if s in target_sheet_names:
-                chosen = s
-                break
 
     if not chosen:
         chosen = sheet_names[0] if len(sheet_names) > 0 else None
@@ -263,7 +264,12 @@ install_last_mod = file_last_modified(install_path)
 # Load (and auto-reload when files change)
 sheets = load_data(data_path, data_last_mod)
 df_main = sheets.get("Tasks", pd.DataFrame()).copy()
-df_install = load_install_data(install_path, install_last_mod).copy()
+
+# main installations sheet (default)
+df_install = load_install_data(install_path, install_last_mod)
+
+# read the 'Installations 2' sheet explicitly for the extra gauges (case-insensitive)
+df_install_phase2 = load_install_data(install_path, install_last_mod, target_sheet_names=["installations 2", "installations2", "installations 2 "])
 
 # ===================== CLEAN DATA =====================
 if not df_main.empty:
@@ -272,10 +278,8 @@ if not df_main.empty:
 
     df_main = df_main.fillna("Null")
     df_main = df_main.replace("NaT", "Null")
-
     df_main = df_main.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_main.columns])
 
-# compute avg_duration globally (so Export tab can use it)
 avg_duration = None
 if not df_main.empty and "Start date" in df_main.columns and "Due date" in df_main.columns:
     df_duration = df_main.copy().replace("Null", None)
@@ -293,6 +297,78 @@ if not df_install.empty:
     df_install = df_install.fillna("Null").replace("NaT", "Null")
     df_install = df_install.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_install.columns], errors="ignore")
 
+if not df_install_phase2.empty:
+    for c in [col for col in df_install_phase2.columns if "date" in col.lower()]:
+        df_install_phase2[c] = pd.to_datetime(df_install_phase2[c], dayfirst=True, errors="coerce")
+    df_install_phase2 = df_install_phase2.fillna("Null").replace("NaT", "Null")
+    df_install_phase2 = df_install_phase2.drop(columns=[col for col in ["Is Recurring", "Late"] if col in df_install_phase2.columns], errors="ignore")
+
+# helper to create a summary (Completed_Sites, Total_Sites) from a given installations df
+def compute_install_summary(df):
+    if df is None or df.empty:
+        return pd.DataFrame()
+    # detect columns
+    contractor_col = None
+    status_col = None
+    sites_col = None
+    for c in df.columns:
+        low = str(c).lower()
+        if not contractor_col and ("contractor" in low or "installer" in low or "contractors" in low):
+            contractor_col = c
+        if not status_col and ("status" in low or "install" in low or "installed" in low or "complete" in low or "progress" in low):
+            status_col = c
+        if not sites_col and ("site" in low or "sites" in low or "total" in low):
+            sites_col = c
+
+    # fallback heuristics
+    if not contractor_col:
+        for c in df.columns:
+            if df[c].dtype == object and not any(k in str(c).lower() for k in ["date"]):
+                contractor_col = c
+                break
+
+    if not status_col:
+        for c in df.columns:
+            low = str(c).lower()
+            if "progress" in low or "state" in low:
+                status_col = c
+                break
+
+    # compute summary
+    try:
+        if pd.api.types.is_numeric_dtype(df[status_col]) if status_col in df.columns else False or (status_col in df.columns and df[status_col].dropna().apply(lambda x: str(x).replace('.','',1).isdigit()).all()):
+            if sites_col:
+                summary = df.groupby(contractor_col).agg(
+                    Installed_Sites=(status_col, "sum"),
+                    Total_Sites=(sites_col, "sum"),
+                ).reset_index()
+            else:
+                summary = df.groupby(contractor_col).agg(
+                    Installed_Sites=(status_col, "sum"),
+                ).reset_index()
+                summary["Total_Sites"] = summary["Installed_Sites"]
+            summary = summary.rename(columns={"Installed_Sites": "Completed_Sites", "Total_Sites": "Total_Sites"})
+        else:
+            summary = (
+                df.assign(_is_completed=df[status_col].apply(lambda v: str(v).strip().lower() in ("completed","installed","complete","yes","done")) if status_col in df.columns else False)
+                .groupby(contractor_col)
+                .agg(Total_Sites=(status_col if status_col in df.columns else df.columns[0], "count"), Completed_Sites=("_is_completed", "sum"))
+                .reset_index()
+            )
+    except Exception:
+        # fallback minimal summary
+        if "Contractor" in df.columns:
+            temp = df.copy()
+            temp["__completed"] = temp.iloc[:, 0].apply(lambda x: False)
+            summary = temp.groupby("Contractor").agg(Total_Sites=(temp.columns[0], "count"), Completed_Sites=("__completed", "sum")).reset_index()
+        else:
+            summary = pd.DataFrame()
+    return summary
+
+# compute summaries for main and phase2
+summary_main = compute_install_summary(df_install)
+summary_phase2 = compute_install_summary(df_install_phase2)
+
 # ===================== MAIN TABS =====================
 tabs = st.tabs(["Installations", "KPIs", "Task Breakdown", "Timeline", "Export Report"])
 
@@ -303,68 +379,40 @@ with tabs[0]:
     if not df_install.empty:
         st.markdown(f"Total Contractors: **{df_install.shape[0]}**")
 
-        contractor_col = None
-        status_col = None
-        sites_col = None
-
+        # determine column names used by main df (for rendering labels)
+        contractor_col_main = None
+        status_col_main = None
+        sites_col_main = None
         if "Contractor" in df_install.columns:
-            contractor_col = "Contractor"
+            contractor_col_main = "Contractor"
         if "Installed" in df_install.columns:
-            status_col = "Installed"
+            status_col_main = "Installed"
         if "Sites" in df_install.columns:
-            sites_col = "Sites"
-
+            sites_col_main = "Sites"
         for c in df_install.columns:
             low = str(c).lower()
-            if not contractor_col and ("contractor" in low or "installer" in low or "contractors" in low):
-                contractor_col = c
-            if not status_col and ("status" in low or "install" in low or "installed" in low or "complete" in low):
-                status_col = c
-            if not sites_col and ("site" in low or "sites" in low or "total" in low):
-                sites_col = c
+            if not contractor_col_main and ("contractor" in low or "installer" in low or "contractors" in low):
+                contractor_col_main = c
+            if not status_col_main and ("status" in low or "install" in low or "installed" in low or "complete" in low):
+                status_col_main = c
+            if not sites_col_main and ("site" in low or "sites" in low or "total" in low):
+                sites_col_main = c
 
-        if not status_col:
+        if not status_col_main:
             for c in df_install.columns:
                 low = str(c).lower()
                 if "progress" in low or "state" in low:
-                    status_col = c
+                    status_col_main = c
                     break
 
-        if not contractor_col:
+        if not contractor_col_main:
             for c in df_install.columns:
                 if df_install[c].dtype == object and not any(k in str(c).lower() for k in ["date"]):
-                    contractor_col = c
+                    contractor_col_main = c
                     break
 
-        if contractor_col and status_col:
+        if contractor_col_main and status_col_main:
             st.markdown("### ⚙️ Contractor Installation Progress")
-
-            def is_completed(value):
-                try:
-                    s = str(value).strip().lower()
-                    return s in ("completed", "complete", "installed", "yes", "done") or pd.notna(pd.to_numeric(value, errors="coerce"))
-                except Exception:
-                    return False
-
-            if pd.api.types.is_numeric_dtype(df_install[status_col]) or df_install[status_col].dropna().apply(lambda x: str(x).replace('.','',1).isdigit()).all():
-                if sites_col:
-                    summary = df_install.groupby(contractor_col).agg(
-                        Installed_Sites=(status_col, "sum"),
-                        Total_Sites=(sites_col, "sum"),
-                    ).reset_index()
-                else:
-                    summary = df_install.groupby(contractor_col).agg(
-                        Installed_Sites=(status_col, "sum"),
-                    ).reset_index()
-                    summary["Total_Sites"] = summary["Installed_Sites"]
-                summary = summary.rename(columns={"Installed_Sites": "Completed_Sites", "Total_Sites": "Total_Sites"})
-            else:
-                summary = (
-                    df_install.assign(_is_completed=df_install[status_col].apply(lambda v: str(v).strip().lower() in ("completed","installed","complete","yes","done")))
-                    .groupby(contractor_col)
-                    .agg(Total_Sites=(status_col, "count"), Completed_Sites=("_is_completed", "sum"))
-                    .reset_index()
-                )
 
             def make_contractor_gauge(completed, total, title, dial_color="#007acc"):
                 pct = (completed / total * 100) if total and total > 0 else 0
@@ -385,41 +433,51 @@ with tabs[0]:
                 fig.update_layout(autosize=True, margin=dict(l=10, r=10, t=40, b=10))
                 return fig
 
-            # --- BEGIN: Extra 3 gauges using the same contractor names ---
-            # choose three contractor names (first three from summary, repeat last if needed)
-            try:
-                names = list(summary[contractor_col].astype(str).tolist()) if contractor_col in summary.columns else []
-            except Exception:
-                names = []
-
-            extra_names = []
-            if len(names) == 0:
-                extra_names = ["No Contractor", "No Contractor", "No Contractor"]
+            # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE One) ---
+            # Prefer summary_phase2 (Installations 2); fallback to summary_main
+            use_summary = summary_phase2 if (not summary_phase2.empty) else summary_main
+            if use_summary is None or use_summary.empty:
+                # placeholder if nothing available
+                extra_records = [{"Contractor": "No Contractor", "Completed_Sites": 0, "Total_Sites": 0} for _ in range(3)]
             else:
-                for i in range(3):
-                    if i < len(names):
-                        extra_names.append(names[i])
-                    else:
-                        extra_names.append(names[-1])
-
-            extra_records = []
-            for nm in extra_names:
-                # try to find matching record in summary, otherwise create a zero record
-                match = summary[summary[contractor_col].astype(str) == str(nm)] if contractor_col in summary.columns else pd.DataFrame()
-                if not match.empty:
-                    rec = match.iloc[0].to_dict()
-                    # ensure keys match expected names
-                    rec[contractor_col] = nm
-                    extra_records.append(rec)
+                # ensure contractor column name exists in use_summary
+                # use first column as contractor column
+                contractor_column = use_summary.columns[0]
+                # pick first three rows (repeat last if fewer)
+                names = list(use_summary[contractor_column].astype(str).tolist())
+                extra_names = []
+                if len(names) == 0:
+                    extra_names = ["No Contractor", "No Contractor", "No Contractor"]
                 else:
-                    extra_records.append({contractor_col: nm, "Completed_Sites": 0, "Total_Sites": 0})
+                    for i in range(3):
+                        if i < len(names):
+                            extra_names.append(names[i])
+                        else:
+                            extra_names.append(names[-1])
 
-            # Render the extra gauges in a compact row
+                extra_records = []
+                for nm in extra_names:
+                    match = use_summary[use_summary[contractor_column].astype(str) == str(nm)]
+                    if not match.empty:
+                        rec = match.iloc[0].to_dict()
+                        # normalize keys to have Completed_Sites and Total_Sites
+                        if "Completed_Sites" not in rec and "Completed" in rec:
+                            rec["Completed_Sites"] = rec.get("Completed")
+                        if "Total_Sites" not in rec and "Total" in rec:
+                            rec["Total_Sites"] = rec.get("Total")
+                        rec[contractor_column] = nm
+                        extra_records.append(rec)
+                    else:
+                        extra_records.append({contractor_column: nm, "Completed_Sites": 0, "Total_Sites": 0})
+
             st.markdown("### 🔁 PHASE One")
             cols_extra = st.columns(len(extra_records))
             for j, rec in enumerate(extra_records):
-                completed = int(rec.get("Completed_Sites", 0) if rec.get("Completed_Sites", 0) is not None else 0)
-                total = int(rec.get("Total_Sites", 0) if rec.get("Total_Sites", 0) is not None else 0)
+                # contractor label detection
+                contractor_label = list(rec.keys())[0] if len(rec.keys())>0 else "Contractor"
+                # get values robustly
+                completed = int(rec.get("Completed_Sites", rec.get("Completed", 0) or 0) if rec.get("Completed_Sites", rec.get("Completed", 0) ) is not None else 0)
+                total = int(rec.get("Total_Sites", rec.get("Total", 0) or 0) if rec.get("Total_Sites", rec.get("Total", 0) ) is not None else 0)
                 pct = (completed / total * 100) if total > 0 else 0
                 if pct >= 90:
                     color = "#00b386"
@@ -429,16 +487,15 @@ with tabs[0]:
                     color = "#e67300"
                 with cols_extra[j]:
                     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    # provide a unique key to avoid Streamlit duplicate element id errors
-                    chart_key = f"extra_gauge_{j}_{str(rec.get(contractor_col,'')).replace(' ','_')}"
-                    st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col, "Contractor")), dial_color=color), use_container_width=True, key=chart_key)
+                    chart_key = f"phase1_extra_gauge_{j}_{str(rec.get(contractor_label,'')).replace(' ','_')}"
+                    st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_label, "Contractor")), dial_color=color), use_container_width=True, key=chart_key)
                     st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("---")
-            # --- END: Extra 3 gauges using the same contractor names ---
+            # --- END: Extra 3 gauges for PHASE One ---
 
-            records = summary.to_dict("records")
-            # render gauges in rows of up to 3; handle rows with fewer items gracefully
+            # render main summary gauges
+            records = summary_main.to_dict("records")
             for i in range(0, len(records), 3):
                 row_items = records[i : i + 3]
                 cols = st.columns(len(row_items))
@@ -454,10 +511,9 @@ with tabs[0]:
                         color = "#e67300"
                     with cols[j]:
                         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                        # unique key per contractor and index
-                        contractor_safe = str(rec.get(contractor_col, "")).replace(" ", "_")
+                        contractor_safe = str(rec.get(contractor_col_main, "")).replace(" ", "_")
                         chart_key = f"gauge_{i}_{j}_{contractor_safe}"
-                        st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True, key=chart_key)
+                        st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col_main, rec.get(list(rec.keys())[0], 'Contractor'))), dial_color=color), use_container_width=True, key=chart_key)
                         st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
         else:
@@ -492,7 +548,6 @@ with tabs[1]:
         st.subheader("Key Performance Indicators")
 
         total = len(df_main)
-        # make progress-safe
         progress_series = df_main.get("Progress", pd.Series([""] * len(df_main)))
         completed = progress_series.str.lower().eq("completed").sum()
         inprogress = progress_series.str.lower().eq("in progress").sum()
@@ -524,14 +579,12 @@ with tabs[1]:
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         with st.container():
-            # use dynamic columns so they can wrap on narrow screens
             cols = st.columns(4)
             widgets = [notstarted, inprogress, completed, overdue]
             titles = ["Not Started", "In Progress", "Completed", "Overdue"]
             for idx_col, (c, val, t, col) in enumerate(zip(cols, widgets, titles, dial_colors)):
                 with c:
                     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    # unique key per KPI dial
                     st.plotly_chart(create_colored_gauge(val, total, t, col), use_container_width=True, key=f"kpi_{t.replace(' ','_')}")
                     st.markdown("</div>", unsafe_allow_html=True)
 
