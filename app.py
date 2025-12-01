@@ -415,7 +415,7 @@ with tabs[0]:
                     extra_records.append({contractor_col: nm, "Completed_Sites": 0, "Total_Sites": 0})
 
             # Render the extra gauges in a compact row
-            st.markdown("### 🔁 Additional Installation Gauges (duplicates)")
+            st.markdown("### 🔁 PHASE One")
             cols_extra = st.columns(len(extra_records))
             for j, rec in enumerate(extra_records):
                 completed = int(rec.get("Completed_Sites", 0) if rec.get("Completed_Sites", 0) is not None else 0)
