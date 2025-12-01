@@ -116,12 +116,6 @@ logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/
 # ===================== HEADER WITH LOGO (RESPONSIVE) =====================
 col1, col2, col3 = st.columns([1, 3, 1])
 
-with col1:
-    try:
-        st.image("Deezlo.png", width=400)
-    except Exception:
-        st.markdown("<div style='text-align:center;'><b>Deezlo</b></div>", unsafe_allow_html=True)
-
 with col2:
     if os.path.exists(data_path):
         file_date = datetime.fromtimestamp(os.path.getctime(data_path)).strftime("%d %B %Y")
