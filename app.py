@@ -470,7 +470,7 @@ with tabs[0]:
                     else:
                         extra_records.append({contractor_column: nm, "Completed_Sites": 0, "Total_Sites": 0})
 
-            st.markdown("### 🔁 PHASE One")
+            st.markdown("### PHASE Two")
             cols_extra = st.columns(len(extra_records))
             for j, rec in enumerate(extra_records):
                 # contractor label detection
