@@ -429,7 +429,9 @@ with tabs[0]:
                     color = "#e67300"
                 with cols_extra[j]:
                     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col, "Contractor")), dial_color=color), use_container_width=True)
+                    # provide a unique key to avoid Streamlit duplicate element id errors
+                    chart_key = f"extra_gauge_{j}_{str(rec.get(contractor_col,'')).replace(' ','_')}"
+                    st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col, "Contractor")), dial_color=color), use_container_width=True, key=chart_key)
                     st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("---")
@@ -452,7 +454,10 @@ with tabs[0]:
                         color = "#e67300"
                     with cols[j]:
                         st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                        st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True)
+                        # unique key per contractor and index
+                        contractor_safe = str(rec.get(contractor_col, "")).replace(" ", "_")
+                        chart_key = f"gauge_{i}_{j}_{contractor_safe}"
+                        st.plotly_chart(make_contractor_gauge(completed, total, str(rec[contractor_col]), dial_color=color), use_container_width=True, key=chart_key)
                         st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
         else:
@@ -523,10 +528,11 @@ with tabs[1]:
             cols = st.columns(4)
             widgets = [notstarted, inprogress, completed, overdue]
             titles = ["Not Started", "In Progress", "Completed", "Overdue"]
-            for c, val, t, col in zip(cols, widgets, titles, dial_colors):
+            for idx_col, (c, val, t, col) in enumerate(zip(cols, widgets, titles, dial_colors)):
                 with c:
                     st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
-                    st.plotly_chart(create_colored_gauge(val, total, t, col), use_container_width=True)
+                    # unique key per KPI dial
+                    st.plotly_chart(create_colored_gauge(val, total, t, col), use_container_width=True, key=f"kpi_{t.replace(' ','_')}")
                     st.markdown("</div>", unsafe_allow_html=True)
 
         with st.expander("📈 Additional Insights", expanded=True):
@@ -548,6 +554,7 @@ with tabs[1]:
                     st.plotly_chart(
                         create_colored_gauge(pct, 100, f"{priority} Priority", priority_colors[i % len(priority_colors)]),
                         use_container_width=True,
+                        key=f"priority_{priority.replace(' ','_')}"
                     )
 
             if "Bucket Name" in df_main.columns:
@@ -567,6 +574,7 @@ with tabs[1]:
                         st.plotly_chart(
                             create_colored_gauge(bucket_pct, 50, bucket_name, "#006666"),
                             use_container_width=True,
+                            key=f"bucket_{i}_{str(bucket_name).replace(' ','_')}"
                         )
 
 # ===================== TASK BREAKDOWN TAB =====================
@@ -633,7 +641,7 @@ with tabs[3]:
             fig_tl.update_yaxes(autorange="reversed")
             fig_tl.update_xaxes(dtick="M1", tickformat="%b %Y", showgrid=True, gridcolor="lightgray", tickangle=-30)
             fig_tl.update_layout(autosize=True, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_tl, use_container_width=True)
+            st.plotly_chart(fig_tl, use_container_width=True, key="timeline_chart")
     else:
         st.info("Timeline data not available.")
 
