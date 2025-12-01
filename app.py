@@ -385,6 +385,56 @@ with tabs[0]:
                 fig.update_layout(autosize=True, margin=dict(l=10, r=10, t=40, b=10))
                 return fig
 
+            # --- BEGIN: Extra 3 gauges using the same contractor names ---
+            # choose three contractor names (first three from summary, repeat last if needed)
+            try:
+                names = list(summary[contractor_col].astype(str).tolist()) if contractor_col in summary.columns else []
+            except Exception:
+                names = []
+
+            extra_names = []
+            if len(names) == 0:
+                extra_names = ["No Contractor", "No Contractor", "No Contractor"]
+            else:
+                for i in range(3):
+                    if i < len(names):
+                        extra_names.append(names[i])
+                    else:
+                        extra_names.append(names[-1])
+
+            extra_records = []
+            for nm in extra_names:
+                # try to find matching record in summary, otherwise create a zero record
+                match = summary[summary[contractor_col].astype(str) == str(nm)] if contractor_col in summary.columns else pd.DataFrame()
+                if not match.empty:
+                    rec = match.iloc[0].to_dict()
+                    # ensure keys match expected names
+                    rec[contractor_col] = nm
+                    extra_records.append(rec)
+                else:
+                    extra_records.append({contractor_col: nm, "Completed_Sites": 0, "Total_Sites": 0})
+
+            # Render the extra gauges in a compact row
+            st.markdown("### 🔁 Additional Installation Gauges (duplicates)")
+            cols_extra = st.columns(len(extra_records))
+            for j, rec in enumerate(extra_records):
+                completed = int(rec.get("Completed_Sites", 0) if rec.get("Completed_Sites", 0) is not None else 0)
+                total = int(rec.get("Total_Sites", 0) if rec.get("Total_Sites", 0) is not None else 0)
+                pct = (completed / total * 100) if total > 0 else 0
+                if pct >= 90:
+                    color = "#00b386"
+                elif pct >= 70:
+                    color = "#007acc"
+                else:
+                    color = "#e67300"
+                with cols_extra[j]:
+                    st.markdown("<div class='metric-card'>", unsafe_allow_html=True)
+                    st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col, "Contractor")), dial_color=color), use_container_width=True)
+                    st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
+                    st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("---")
+            # --- END: Extra 3 gauges using the same contractor names ---
+
             records = summary.to_dict("records")
             # render gauges in rows of up to 3; handle rows with fewer items gracefully
             for i in range(0, len(records), 3):
