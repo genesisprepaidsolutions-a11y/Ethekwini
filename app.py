@@ -414,19 +414,19 @@ with tabs[0]:
                     go.Indicator(
                         mode="gauge+number",
                         value=pct,
-                        number={"suffix": "%", "font": {"size": 18, "color": dial_color}},
-                        title={"text": title, "font": {"size": 12, "color": dial_color}},
+                        number={"suffix": "%", "font": {"size": 14, "color": dial_color}},
+                        title={"text": title, "font": {"size": 11, "color": dial_color}},
                         gauge={
                             "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                            "bar": {"color": dial_color, "thickness": 0.15},
+                            "bar": {"color": dial_color, "thickness": 0.12},
                             "bgcolor": "#f7f9fb",
                             "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                         },
                     )
                 )
-                fig.update_layout(autosize=True, height=220, margin=dict(l=8, r=8, t=30, b=8))
+                # keep chart/container height unchanged (autosize + margins) while reducing gauge visual sizes
+                fig.update_layout(autosize=True, margin=dict(l=8, r=8, t=30, b=8))
                 return fig
-
             # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE One) ---
             # Prefer summary_phase2 (Installations 2); fallback to summary_main
             use_summary = summary_phase2 if (not summary_phase2.empty) else summary_main
@@ -557,19 +557,19 @@ with tabs[1]:
                 go.Indicator(
                     mode="gauge+number",
                     value=pct,
-                    number={"suffix": "%", "font": {"size": 24, "color": dial_color}},
-                    title={"text": title, "font": {"size": 14, "color": dial_color}},
+                    number={"suffix": "%", "font": {"size": 16, "color": dial_color}},
+                    title={"text": title, "font": {"size": 12, "color": dial_color}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                        "bar": {"color": dial_color, "thickness": 0.15},
+                        "bar": {"color": dial_color, "thickness": 0.12},
                         "bgcolor": "#f7f9fb",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
             )
-            fig.update_layout(autosize=True, height=200, margin=dict(l=12, r=12, t=30, b=12))
+            # keep chart/container height unchanged (autosize + margins) while reducing gauge visual sizes
+            fig.update_layout(autosize=True, margin=dict(l=15, r=15, t=40, b=20))
             return fig
-
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         with st.container():
