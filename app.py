@@ -615,13 +615,44 @@ with tabs[1]:
                 )
 
                 st.markdown("#### 🧭 Phase Completion Dials")
-                # render bucket completion dials in rows of up to 4 to match KPI sizes
-                if not completion_by_bucket.empty:
+                # Reorder so 'Setup and Mobilisation' sits immediately after 'Post Implementation Phase' if present
+                completion_by_bucket = (
+                    df_main.groupby("Bucket Name")["Progress"]
+                    .apply(lambda x: (x.str.lower() == "completed").mean() * 100)
+                    .reset_index()
+                    .rename(columns={"Progress": "Completion %"})
+                )
+
+                buckets = completion_by_bucket.copy()
+                buckets['Bucket Name'] = buckets['Bucket Name'].astype(str).str.strip()
+
+                pip_idx = None
+                setup_idx = None
+                for idx_row, name in enumerate(buckets['Bucket Name'].astype(str)):
+                    low = name.lower()
+                    if 'post implementation' in low:
+                        pip_idx = idx_row
+                    if 'setup' in low and 'mobil' in low:
+                        setup_idx = idx_row
+
+                if setup_idx is not None:
+                    setup_row = buckets.iloc[[setup_idx]].copy()
+                    buckets = buckets.drop(buckets.index[setup_idx]).reset_index(drop=True)
+                    if pip_idx is not None:
+                        if setup_idx < pip_idx:
+                            pip_idx -= 1
+                        insert_at = pip_idx + 1
+                    else:
+                        insert_at = min(4, len(buckets))
+                    buckets = pd.concat([buckets.iloc[:insert_at], setup_row, buckets.iloc[insert_at:]]).reset_index(drop=True)
+
+                # render bucket completion dials in rows of up to 5 to match KPI sizes
+                if not buckets.empty:
                     bucket_cols = st.columns(5)
-                    for i, row in enumerate(completion_by_bucket.itertuples(index=False)):
+                    for i, row in enumerate(buckets.itertuples(index=False)):
                         bucket_name = row[0]
                         bucket_pct = row[1]
-                        col_idx = i % 4
+                        col_idx = i % 5
                         with bucket_cols[col_idx]:
                             st.plotly_chart(
                                 create_colored_gauge(bucket_pct, 100, bucket_name, "#006666"),
