@@ -418,7 +418,7 @@ with tabs[0]:
                         title={"text": title, "font": {"size": 11, "color": dial_color}},
                         gauge={
                             "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                            "bar": {"color": dial_color, "thickness": 0.12},
+                            "bar": {"color": dial_color, "thickness": 0.35},
                             "bgcolor": "#f7f9fb",
                             "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                         },
@@ -561,7 +561,7 @@ with tabs[1]:
                     title={"text": title, "font": {"size": 12, "color": dial_color}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                        "bar": {"color": dial_color, "thickness": 0.12},
+                        "bar": {"color": dial_color, "thickness": 0.35},
                         "bgcolor": "#f7f9fb",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
@@ -801,5 +801,6 @@ with tabs[4]:
         )
     else:
         st.warning("No data found to export.")
+
 
 
