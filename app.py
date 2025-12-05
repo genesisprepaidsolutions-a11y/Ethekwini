@@ -534,8 +534,8 @@ with tabs[1]:
                 go.Indicator(
                     mode="gauge+number",
                     value=pct,
-                    number={"suffix": "%", "font": {"size": 20, "color": dial_color}},
-                    title={"text": title, "font": {"size": 16, "color": dial_color}},
+                    number={"suffix": "%", "font": {"size": 30, "color": dial_color}},
+                    title={"text": title, "font": {"size": 20, "color": dial_color}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
                         "bar": {"color": dial_color, "thickness": 0.35},
