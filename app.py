@@ -513,29 +513,6 @@ with tabs[0]:
         else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
 
-        st.markdown("### 🧾 Installation Data")
-
-        def df_to_html_install(df):
-            html = "<div style='overflow-x:auto;'>"
-            html += "<table>"
-            html += "<tr>"
-            for col in df.columns:
-                html += f"<th>{col}</th>"
-            html += "</tr>"
-            for _, row in df.iterrows():
-                html += "<tr>"
-                for cell in row:
-                    cell_display = f"<i style='color:gray;'>Null</i>" if str(cell).strip() == "Null" else str(cell)
-                    html += f"<td>{cell_display}</td>"
-                html += "</tr>"
-            html += "</table>"
-            html += "</div>"
-            return html
-
-        st.markdown(df_to_html_install(df_install), unsafe_allow_html=True)
-    else:
-        st.warning("No data found in Weekly update sheet.xlsx.")
-
 # ===================== KPI TAB =====================
 with tabs[1]:
     if not df_main.empty:
