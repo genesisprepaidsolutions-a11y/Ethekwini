@@ -628,10 +628,6 @@ with tabs[1]:
                                 use_container_width=True,
                                 key=f"bucket_{i}_{str(bucket_name).replace(' ','_')}"
                             )
-                ),
-                            use_container_width=True,
-                            key=f"bucket_{i}_{str(bucket_name).replace(' ','_')}"
-                        )
 
 # ===================== TASK BREAKDOWN TAB =====================
 with tabs[2]:
@@ -805,4 +801,5 @@ with tabs[4]:
         )
     else:
         st.warning("No data found to export.")
+
 
