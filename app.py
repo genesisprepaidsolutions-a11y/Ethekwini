@@ -573,7 +573,7 @@ with tabs[1]:
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
 
         with st.container():
-            cols = st.columns(4)
+            cols = st.columns(5)
             widgets = [notstarted, inprogress, completed, overdue]
             titles = ["Not Started", "In Progress", "Completed", "Overdue"]
             for idx_col, (c, val, t, col) in enumerate(zip(cols, widgets, titles, dial_colors)):
@@ -595,7 +595,7 @@ with tabs[1]:
             priority_counts = df_main.get("Priority", pd.Series([])).value_counts(normalize=True) * 100
             st.markdown("#### 🔰 Priority Distribution")
             # render priority gauges in rows of up to 4 to match KPI sizes
-            pr_cols = st.columns(4)
+            pr_cols = st.columns(5)
             priority_colors = ["#ff6600", "#0099cc", "#00cc66", "#cc3366"]
             for i, (priority, pct) in enumerate(priority_counts.items()):
                 col_idx = i % 4
@@ -617,7 +617,7 @@ with tabs[1]:
                 st.markdown("#### 🧭 Phase Completion Dials")
                 # render bucket completion dials in rows of up to 4 to match KPI sizes
                 if not completion_by_bucket.empty:
-                    bucket_cols = st.columns(4)
+                    bucket_cols = st.columns(5)
                     for i, row in enumerate(completion_by_bucket.itertuples(index=False)):
                         bucket_name = row[0]
                         bucket_pct = row[1]
@@ -801,6 +801,3 @@ with tabs[4]:
         )
     else:
         st.warning("No data found to export.")
-
-
-
