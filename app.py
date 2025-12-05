@@ -414,17 +414,17 @@ with tabs[0]:
                     go.Indicator(
                         mode="gauge+number",
                         value=pct,
-                        number={"suffix": "%", "font": {"size": 30, "color": dial_color}},
-                        title={"text": title, "font": {"size": 16, "color": dial_color}},
+                        number={"suffix": "%", "font": {"size": 18, "color": dial_color}},
+                        title={"text": title, "font": {"size": 12, "color": dial_color}},
                         gauge={
                             "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                            "bar": {"color": dial_color, "thickness": 0.3},
+                            "bar": {"color": dial_color, "thickness": 0.15},
                             "bgcolor": "#f7f9fb",
                             "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                         },
                     )
                 )
-                fig.update_layout(autosize=True, margin=dict(l=10, r=10, t=40, b=10))
+                fig.update_layout(autosize=True, height=220, margin=dict(l=8, r=8, t=30, b=8))
                 return fig
 
             # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE One) ---
@@ -557,17 +557,17 @@ with tabs[1]:
                 go.Indicator(
                     mode="gauge+number",
                     value=pct,
-                    number={"suffix": "%", "font": {"size": 36, "color": dial_color}},
-                    title={"text": title, "font": {"size": 20, "color": dial_color}},
+                    number={"suffix": "%", "font": {"size": 24, "color": dial_color}},
+                    title={"text": title, "font": {"size": 14, "color": dial_color}},
                     gauge={
                         "axis": {"range": [0, 100], "tickwidth": 1, "tickcolor": "gray"},
-                        "bar": {"color": dial_color, "thickness": 0.3},
+                        "bar": {"color": dial_color, "thickness": 0.15},
                         "bgcolor": "#f7f9fb",
                         "steps": [{"range": [0, 100], "color": "#e0e0e0"}],
                     },
                 )
             )
-            fig.update_layout(autosize=True, margin=dict(l=15, r=15, t=40, b=20))
+            fig.update_layout(autosize=True, height=200, margin=dict(l=12, r=12, t=30, b=12))
             return fig
 
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
