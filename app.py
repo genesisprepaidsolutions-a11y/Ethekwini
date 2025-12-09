@@ -113,51 +113,11 @@ data_path = "Ethekwini WS-7761.xlsx"
 install_path = "Weekly update sheet.xlsx"
 logo_url = "https://github.com/genesisprepaidsolutions-a11y/Ethekwini/blob/main/ethekwini_logo.png?raw=true"
 
-# ===================== HEADER WITH LOGO (RESPONSIVE) =====================
-col1, col2, col3 = st.columns([1, 3, 1])
-
-with col2:
-    if os.path.exists(data_path):
-        file_date = datetime.fromtimestamp(os.path.getctime(data_path)).strftime("%d %B %Y")
-    else:
-        file_date = datetime.now().strftime("%d %B %Y")
-
-    st.markdown(
-        "<h1 style='text-align:center; color:#003366; margin:6px 0;'>"
-        "eThekwini WS-7761 Smart Meter Project"
-        "</h1>",
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        f"<div style='text-align:center; font-size:16px;'><b>📅 Data as of:</b> {file_date}</div>",
-        unsafe_allow_html=True
-    )
-
-with col3:
-    try:
-        st.image("ethekwini_logo.png", width=150)
-    except Exception:
-        st.markdown("<div style='text-align:center;'><b>eThekwini</b></div>", unsafe_allow_html=True)
-
-st.markdown("---")
-
-# ===================== THEME SETTINGS =====================
-bg_color = "#ffffff"
-text_color = "#003366"
-table_colors = {
-    "Not Started": "#cce6ff",
-    "In Progress": "#ffeb99",
-    "Completed": "#b3ffd9",
-    "Overdue": "#ffb3b3",
-}
-
-# ===================== LOAD DATA (AUTO-REFRESH ENABLED) =====================
-
+# ===================== HELPER: FILE TIMESTAMPS =====================
 def file_last_modified(path):
     return os.path.getmtime(path) if os.path.exists(path) else 0
 
-
+# ===================== LOAD DATA (AUTO-REFRESH ENABLED) =====================
 @st.cache_data
 def load_data(path, last_modified):
     if not os.path.exists(path):
@@ -170,7 +130,6 @@ def load_data(path, last_modified):
         except Exception:
             sheets[s] = pd.DataFrame()
     return sheets
-
 
 @st.cache_data
 def load_install_data(path, last_modified, target_sheet_names=None):
@@ -250,7 +209,6 @@ def load_install_data(path, last_modified, target_sheet_names=None):
 
     return df
 
-
 # Detect file changes by timestamp
 data_last_mod = file_last_modified(data_path)
 install_last_mod = file_last_modified(install_path)
@@ -264,6 +222,100 @@ df_install = load_install_data(install_path, install_last_mod)
 
 # read the 'Installations 2' sheet explicitly for the extra gauges (case-insensitive)
 df_install_phase2 = load_install_data(install_path, install_last_mod, target_sheet_names=["installations 2", "installations2", "installations 2 "])
+
+# ===================== COMPUTE 'DATA AS OF' FROM INSTALLATIONS SHEET =====================
+def compute_data_as_of_from_installations(df_install, fallback_path=None):
+    """
+    Return a formatted date string representing the latest date found in df_install.
+    If none found, fallback to file creation/modification date or today's date.
+    """
+    # Attempt 1: columns whose name contains 'date'
+    try:
+        if df_install is not None and not df_install.empty:
+            candidates = []
+            # check columns with 'date' in the name first
+            date_cols = [c for c in df_install.columns if 'date' in str(c).lower()]
+            for c in date_cols:
+                try:
+                    series = pd.to_datetime(df_install[c], dayfirst=True, errors='coerce')
+                    vals = series.dropna().values
+                    if len(vals) > 0:
+                        candidates.append(series.max())
+                except Exception:
+                    continue
+
+            # Attempt 2: any datetime typed columns
+            if len(candidates) == 0:
+                for c in df_install.columns:
+                    if pd.api.types.is_datetime64_any_dtype(df_install[c]):
+                        series = df_install[c].dropna()
+                        if len(series) > 0:
+                            candidates.append(pd.to_datetime(series).max())
+
+            # Attempt 3: try coercing every column to datetime and take max
+            if len(candidates) == 0:
+                for c in df_install.columns:
+                    try:
+                        coerced = pd.to_datetime(df_install[c], dayfirst=True, errors='coerce')
+                        if coerced.dropna().shape[0] > 0:
+                            candidates.append(coerced.max())
+                    except Exception:
+                        continue
+
+            if len(candidates) > 0:
+                # get the latest
+                latest = max([pd.to_datetime(x) for x in candidates if pd.notna(x)])
+                return latest.strftime("%d %B %Y")
+
+    except Exception:
+        pass
+
+    # fallback 1: file creation/modification date of the installations workbook
+    if fallback_path and os.path.exists(fallback_path):
+        try:
+            ts = os.path.getctime(fallback_path)
+            return datetime.fromtimestamp(ts).strftime("%d %B %Y")
+        except Exception:
+            pass
+
+    # final fallback: today
+    return datetime.now().strftime("%d %B %Y")
+
+data_as_of_str = compute_data_as_of_from_installations(df_install, fallback_path=install_path)
+
+# ===================== HEADER WITH LOGO (RESPONSIVE) =====================
+col1, col2, col3 = st.columns([1, 3, 1])
+
+with col2:
+    st.markdown(
+        "<h1 style='text-align:center; color:#003366; margin:6px 0;'>"
+        "eThekwini WS-7761 Smart Meter Project"
+        "</h1>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"<div style='text-align:center; font-size:16px;'><b>📅 Data as of:</b> {data_as_of_str}</div>",
+        unsafe_allow_html=True
+    )
+
+with col3:
+    try:
+        st.image("ethekwini_logo.png", width=150)
+    except Exception:
+        st.markdown("<div style='text-align:center;'><b>eThekwini</b></div>", unsafe_allow_html=True)
+
+st.markdown("---")
+
+# ===================== THEME SETTINGS =====================
+bg_color = "#ffffff"
+text_color = "#003366"
+table_colors = {
+    "Not Started": "#cce6ff",
+    "In Progress": "#ffeb99",
+    "Completed": "#b3ffd9",
+    "Overdue": "#ffb3b3",
+}
 
 # ===================== CLEAN DATA =====================
 if not df_main.empty:
@@ -424,7 +476,6 @@ with tabs[0]:
                         },
                     )
                 )
-                # keep chart/container height unchanged (autosize + margins) while reducing gauge visual sizes
                 fig.update_layout(autosize=True, margin=dict(l=8, r=8, t=30, b=8))
                 return fig
             # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE One) ---
@@ -512,6 +563,8 @@ with tabs[0]:
                         st.markdown("</div>", unsafe_allow_html=True)
         else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
+    else:
+        st.info("No installations data found in the selected workbook.")
 
 # ===================== KPI TAB =====================
 with tabs[1]:
@@ -544,7 +597,6 @@ with tabs[1]:
                     },
                 )
             )
-            # keep chart/container height unchanged (autosize + margins) while reducing gauge visual sizes
             fig.update_layout(autosize=True, margin=dict(l=15, r=15, t=40, b=20))
             return fig
         dial_colors = ["#003366", "#007acc", "#00b386", "#e67300"]
