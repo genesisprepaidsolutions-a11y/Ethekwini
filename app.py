@@ -95,6 +95,11 @@ st.markdown(
     tr:nth-child(even) {background-color: #f0f6fb;}
     tr:hover {background-color: #d6ecff;}
 
+    /* Styles to render the installs table without grid lines */
+    .no-grid { border: none !important; }
+    .no-grid th, .no-grid td { border: none !important; padding: 8px 10px; }
+    .no-grid thead th { background-color: #007acc; color: white; font-weight:600; }
+
     /* prevent overflow on very narrow screens */
     * { max-width: 100% !important; }
     /* small tweaks for very small viewports */
@@ -624,7 +629,10 @@ with tabs[0]:
                     display_df = display_df[display_df['Contractor'].str.len() > 0].reset_index(drop=True)
 
                     st.markdown("### 📋 Total Installs per Contractor (Combined: Phase One + Phase Two)")
-                    st.dataframe(display_df, height=300)
+
+                    # Render a clean HTML table without grid lines
+                    html_table = display_df.to_html(index=False, classes='no-grid', border=0, justify='center')
+                    st.markdown(f"<div style='overflow-x:auto'>{html_table}</div>", unsafe_allow_html=True)
             except Exception as e:
                 st.exception(f"Error rendering installs per contractor table: {e}")
 
