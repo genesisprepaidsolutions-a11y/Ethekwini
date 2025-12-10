@@ -575,37 +575,80 @@ with tabs[0]:
                         st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- NEW: Table showing total installs per contractor ---
+            # --- NEW: Combined Table showing Phase One and Phase Two totals per contractor ---
             try:
-                if not summary_main.empty:
-                    table_df = summary_main.copy()
-                    # ensure standard column names
-                    if 'Contractor' not in table_df.columns:
-                        table_df = table_df.rename(columns={table_df.columns[0]: 'Contractor'})
-                    if 'Completed_Sites' not in table_df.columns and 'Completed' in table_df.columns:
-                        table_df = table_df.rename(columns={'Completed': 'Completed_Sites'})
-                    if 'Total_Sites' not in table_df.columns and 'Total' in table_df.columns:
-                        table_df = table_df.rename(columns={'Total': 'Total_Sites'})
+                # prepare phase one and phase two dataframes
+                phase1_df = summary_main.copy() if not summary_main.empty else pd.DataFrame()
+                phase2_df = summary_phase2.copy() if not summary_phase2.empty else pd.DataFrame()
 
-                    # fill numeric NaNs with zeros
+                # standardize column names
+                def standardize(df, default_name):
+                    if df.empty:
+                        return df
+                    df = df.copy()
+                    if 'Contractor' not in df.columns:
+                        df = df.rename(columns={df.columns[0]: 'Contractor'})
+                    if 'Completed_Sites' not in df.columns and 'Completed' in df.columns:
+                        df = df.rename(columns={'Completed': 'Completed_Sites'})
+                    if 'Total_Sites' not in df.columns and 'Total' in df.columns:
+                        df = df.rename(columns={'Total': 'Total_Sites'})
+                    # ensure numeric
                     for col in ['Completed_Sites', 'Total_Sites']:
-                        if col in table_df.columns:
-                            table_df[col] = pd.to_numeric(table_df[col], errors='coerce').fillna(0).astype(int)
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                        else:
+                            df[col] = 0
+                    return df[['Contractor', 'Completed_Sites', 'Total_Sites']]
 
-                    # compute an overall total row
-                    overall = pd.DataFrame([{
-                        'Contractor': 'TOTAL',
-                        'Completed_Sites': int(table_df['Completed_Sites'].sum()) if 'Completed_Sites' in table_df.columns else 0,
-                        'Total_Sites': int(table_df['Total_Sites'].sum()) if 'Total_Sites' in table_df.columns else 0,
-                    }])
-                    display_df = pd.concat([table_df[['Contractor', 'Completed_Sites', 'Total_Sites']], overall], ignore_index=True)
+                p1 = standardize(phase1_df, 'Phase One')
+                p2 = standardize(phase2_df, 'Phase Two')
 
-                    st.markdown("### 📋 Total Installs per Contractor")
-                    st.table(display_df)
+                # merge on Contractor
+                if p1.empty and p2.empty:
+                    st.info("No contractor summaries available for Phase One or Phase Two.")
                 else:
-                    st.info("No contractor summary available to show totals per contractor.")
-            except Exception:
-                st.exception("Error rendering installs per contractor table")
+                    merged = pd.merge(p1, p2, on='Contractor', how='outer', suffixes=('_Phase1', '_Phase2'))
+                    # fill NaNs
+                    merged[['Completed_Sites_Phase1','Total_Sites_Phase1','Completed_Sites_Phase2','Total_Sites_Phase2']] = merged[['Completed_Sites_Phase1','Total_Sites_Phase1','Completed_Sites_Phase2','Total_Sites_Phase2']].fillna(0).astype(int)
+
+                    # compute combined totals
+                    merged['Completed_Combined'] = merged['Completed_Sites_Phase1'] + merged['Completed_Sites_Phase2']
+                    merged['Total_Combined'] = merged['Total_Sites_Phase1'] + merged['Total_Sites_Phase2']
+                    # percent complete
+                    merged['Pct_Combined'] = merged.apply(lambda r: (int(r['Completed_Combined']) / int(r['Total_Combined']) * 100) if int(r['Total_Combined'])>0 else 0, axis=1).round(1)
+
+                    # order columns for display
+                    display_cols = ['Contractor', 'Completed_Sites_Phase1', 'Total_Sites_Phase1', 'Completed_Sites_Phase2', 'Total_Sites_Phase2', 'Completed_Combined', 'Total_Combined', 'Pct_Combined']
+                    display_df = merged[display_cols].copy()
+                    display_df = display_df.rename(columns={
+                        'Completed_Sites_Phase1': 'Phase One Completed',
+                        'Total_Sites_Phase1': 'Phase One Total',
+                        'Completed_Sites_Phase2': 'Phase Two Completed',
+                        'Total_Sites_Phase2': 'Phase Two Total',
+                        'Completed_Combined': 'Combined Completed',
+                        'Total_Combined': 'Combined Total',
+                        'Pct_Combined': 'Combined %'
+                    })
+
+                    # add TOTAL row
+                    total_row = {
+                        'Contractor': 'TOTAL',
+                        'Phase One Completed': int(display_df['Phase One Completed'].sum()),
+                        'Phase One Total': int(display_df['Phase One Total'].sum()),
+                        'Phase Two Completed': int(display_df['Phase Two Completed'].sum()),
+                        'Phase Two Total': int(display_df['Phase Two Total'].sum()),
+                        'Combined Completed': int(display_df['Combined Completed'].sum()),
+                        'Combined Total': int(display_df['Combined Total'].sum()),
+                        'Combined %': round((int(display_df['Combined Completed'].sum()) / int(display_df['Combined Total'].sum()) * 100) if int(display_df['Combined Total'].sum())>0 else 0,1)
+                    }
+                    display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
+
+                    st.markdown("### 📋 Total Installs per Contractor (Phase One & Phase Two)")
+                    st.dataframe(display_df.style.format({
+                        'Combined %': '{:.1f}%'
+                    }), height=300)
+            except Exception as e:
+                st.exception(f"Error rendering installs per contractor table: {e}")
 
         else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
