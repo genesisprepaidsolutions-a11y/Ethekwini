@@ -228,12 +228,22 @@ def compute_data_as_of_from_installations(df_install, fallback_path=None):
     """
     Return a formatted date string representing the latest date found in df_install.
     If none found, fallback to file creation/modification date or today's date.
+    Also attempts to read a column named like 'Data as of', 'As of' or a top-left cell in the sheet.
     """
-    # Attempt 1: columns whose name contains 'date'
+    # Attempt 0: check explicitly for columns named 'data as of' or 'as of'
     try:
         if df_install is not None and not df_install.empty:
+            for candidate_name in [c for c in df_install.columns if 'as of' in str(c).lower() or 'data as' in str(c).lower()]:
+                # take first non-null value from that column
+                vals = df_install[candidate_name].dropna()
+                if len(vals) > 0:
+                    # try parse
+                    parsed = pd.to_datetime(vals.iloc[0], dayfirst=True, errors='coerce')
+                    if pd.notna(parsed):
+                        return parsed.strftime("%d %B %Y")
+
+            # Attempt 1: columns whose name contains 'date'
             candidates = []
-            # check columns with 'date' in the name first
             date_cols = [c for c in df_install.columns if 'date' in str(c).lower()]
             for c in date_cols:
                 try:
@@ -263,7 +273,6 @@ def compute_data_as_of_from_installations(df_install, fallback_path=None):
                         continue
 
             if len(candidates) > 0:
-                # get the latest
                 latest = max([pd.to_datetime(x) for x in candidates if pd.notna(x)])
                 return latest.strftime("%d %B %Y")
 
@@ -423,7 +432,9 @@ with tabs[0]:
     st.subheader("📦 Installations Status")
 
     if not df_install.empty:
-        st.markdown(f"Total Contractors: **{df_install.shape[0]}**")
+        # show unique contractors count rather than row count
+        unique_contractors = df_install["Contractor"].nunique() if "Contractor" in df_install.columns else df_install.shape[0]
+        st.markdown(f"Total Contractors: **{unique_contractors}**")
 
         # determine column names used by main df (for rendering labels)
         contractor_col_main = None
@@ -478,7 +489,7 @@ with tabs[0]:
                 )
                 fig.update_layout(autosize=True, margin=dict(l=8, r=8, t=30, b=8))
                 return fig
-            # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE One) ---
+            # --- BEGIN: Extra 3 gauges reading from 'Installations 2' sheet (PHASE Two) ---
             # Prefer summary_phase2 (Installations 2); fallback to summary_main
             use_summary = summary_phase2 if (not summary_phase2.empty) else summary_main
             if use_summary is None or use_summary.empty:
@@ -537,7 +548,9 @@ with tabs[0]:
                     st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                     st.markdown("</div>", unsafe_allow_html=True)
             st.markdown("---")
-            # --- END: Extra 3 gauges for PHASE One ---
+            # label requested: put PHASE One below PHASE Two gauges
+            st.markdown("### PHASE One")
+            # --- END: Extra 3 gauges for PHASE Two ---
 
             # render main summary gauges
             records = summary_main.to_dict("records")
@@ -561,6 +574,39 @@ with tabs[0]:
                         st.plotly_chart(make_contractor_gauge(completed, total, str(rec.get(contractor_col_main, rec.get(list(rec.keys())[0], 'Contractor'))), dial_color=color), use_container_width=True, key=chart_key)
                         st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
+
+            # --- NEW: Table showing total installs per contractor ---
+            try:
+                if not summary_main.empty:
+                    table_df = summary_main.copy()
+                    # ensure standard column names
+                    if 'Contractor' not in table_df.columns:
+                        table_df = table_df.rename(columns={table_df.columns[0]: 'Contractor'})
+                    if 'Completed_Sites' not in table_df.columns and 'Completed' in table_df.columns:
+                        table_df = table_df.rename(columns={'Completed': 'Completed_Sites'})
+                    if 'Total_Sites' not in table_df.columns and 'Total' in table_df.columns:
+                        table_df = table_df.rename(columns={'Total': 'Total_Sites'})
+
+                    # fill numeric NaNs with zeros
+                    for col in ['Completed_Sites', 'Total_Sites']:
+                        if col in table_df.columns:
+                            table_df[col] = pd.to_numeric(table_df[col], errors='coerce').fillna(0).astype(int)
+
+                    # compute an overall total row
+                    overall = pd.DataFrame([{
+                        'Contractor': 'TOTAL',
+                        'Completed_Sites': int(table_df['Completed_Sites'].sum()) if 'Completed_Sites' in table_df.columns else 0,
+                        'Total_Sites': int(table_df['Total_Sites'].sum()) if 'Total_Sites' in table_df.columns else 0,
+                    }])
+                    display_df = pd.concat([table_df[['Contractor', 'Completed_Sites', 'Total_Sites']], overall], ignore_index=True)
+
+                    st.markdown("### 📋 Total Installs per Contractor")
+                    st.table(display_df)
+                else:
+                    st.info("No contractor summary available to show totals per contractor.")
+            except Exception:
+                st.exception("Error rendering installs per contractor table")
+
         else:
             st.info("Could not auto-detect Contractor or Status columns. Showing raw installation data below.")
     else:
