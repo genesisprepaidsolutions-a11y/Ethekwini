@@ -575,14 +575,14 @@ with tabs[0]:
                         st.markdown(f"<div class='dial-label'>{completed} / {total} installs</div>", unsafe_allow_html=True)
                         st.markdown("</div>", unsafe_allow_html=True)
 
-            # --- NEW: Combined Table showing Phase One and Phase Two totals per contractor ---
+            # --- NEW: Simplified Combined Table showing only Combined Completed & Combined Total per contractor (sorted) ---
             try:
                 # prepare phase one and phase two dataframes
                 phase1_df = summary_main.copy() if not summary_main.empty else pd.DataFrame()
                 phase2_df = summary_phase2.copy() if not summary_phase2.empty else pd.DataFrame()
 
                 # standardize column names
-                def standardize(df, default_name):
+                def standardize(df):
                     if df.empty:
                         return df
                     df = df.copy()
@@ -600,8 +600,8 @@ with tabs[0]:
                             df[col] = 0
                     return df[['Contractor', 'Completed_Sites', 'Total_Sites']]
 
-                p1 = standardize(phase1_df, 'Phase One')
-                p2 = standardize(phase2_df, 'Phase Two')
+                p1 = standardize(phase1_df)
+                p2 = standardize(phase2_df)
 
                 # merge on Contractor
                 if p1.empty and p2.empty:
@@ -612,41 +612,19 @@ with tabs[0]:
                     merged[['Completed_Sites_Phase1','Total_Sites_Phase1','Completed_Sites_Phase2','Total_Sites_Phase2']] = merged[['Completed_Sites_Phase1','Total_Sites_Phase1','Completed_Sites_Phase2','Total_Sites_Phase2']].fillna(0).astype(int)
 
                     # compute combined totals
-                    merged['Completed_Combined'] = merged['Completed_Sites_Phase1'] + merged['Completed_Sites_Phase2']
-                    merged['Total_Combined'] = merged['Total_Sites_Phase1'] + merged['Total_Sites_Phase2']
-                    # percent complete
-                    merged['Pct_Combined'] = merged.apply(lambda r: (int(r['Completed_Combined']) / int(r['Total_Combined']) * 100) if int(r['Total_Combined'])>0 else 0, axis=1).round(1)
+                    merged['Combined Completed'] = merged['Completed_Sites_Phase1'] + merged['Completed_Sites_Phase2']
+                    merged['Combined Total'] = merged['Total_Sites_Phase1'] + merged['Total_Sites_Phase2']
 
-                    # order columns for display
-                    display_cols = ['Contractor', 'Completed_Sites_Phase1', 'Total_Sites_Phase1', 'Completed_Sites_Phase2', 'Total_Sites_Phase2', 'Completed_Combined', 'Total_Combined', 'Pct_Combined']
-                    display_df = merged[display_cols].copy()
-                    display_df = display_df.rename(columns={
-                        'Completed_Sites_Phase1': 'Phase One Completed',
-                        'Total_Sites_Phase1': 'Phase One Total',
-                        'Completed_Sites_Phase2': 'Phase Two Completed',
-                        'Total_Sites_Phase2': 'Phase Two Total',
-                        'Completed_Combined': 'Combined Completed',
-                        'Total_Combined': 'Combined Total',
-                        'Pct_Combined': 'Combined %'
-                    })
+                    # select only required columns and sort by Combined Total descending
+                    display_df = merged[['Contractor', 'Combined Completed', 'Combined Total']].copy()
+                    display_df = display_df.sort_values(by='Combined Total', ascending=False).reset_index(drop=True)
 
-                    # add TOTAL row
-                    total_row = {
-                        'Contractor': 'TOTAL',
-                        'Phase One Completed': int(display_df['Phase One Completed'].sum()),
-                        'Phase One Total': int(display_df['Phase One Total'].sum()),
-                        'Phase Two Completed': int(display_df['Phase Two Completed'].sum()),
-                        'Phase Two Total': int(display_df['Phase Two Total'].sum()),
-                        'Combined Completed': int(display_df['Combined Completed'].sum()),
-                        'Combined Total': int(display_df['Combined Total'].sum()),
-                        'Combined %': round((int(display_df['Combined Completed'].sum()) / int(display_df['Combined Total'].sum()) * 100) if int(display_df['Combined Total'].sum())>0 else 0,1)
-                    }
-                    display_df = pd.concat([display_df, pd.DataFrame([total_row])], ignore_index=True)
+                    # drop any rows where Contractor is null/blank
+                    display_df['Contractor'] = display_df['Contractor'].astype(str).str.strip()
+                    display_df = display_df[display_df['Contractor'].str.len() > 0].reset_index(drop=True)
 
-                    st.markdown("### 📋 Total Installs per Contractor (Phase One & Phase Two)")
-                    st.dataframe(display_df.style.format({
-                        'Combined %': '{:.1f}%'
-                    }), height=300)
+                    st.markdown("### 📋 Total Installs per Contractor (Combined: Phase One + Phase Two)")
+                    st.dataframe(display_df, height=300)
             except Exception as e:
                 st.exception(f"Error rendering installs per contractor table: {e}")
 
